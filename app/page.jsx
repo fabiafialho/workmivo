@@ -1,42 +1,1004 @@
-'use client';
-import {useState,useEffect,useCallback} from 'react';
-import {LayoutDashboard,Users,FileText,CalendarDays,Receipt,Settings,LogOut,Plus,Menu,X,ChevronDown,Trash2,Pencil,ArrowRight,BriefcaseBusiness,Globe2,Check,Search} from 'lucide-react';
-import {supabase} from '../lib/supabase';
-import {translations} from '../lib/translations';
-const nav=[['dashboard',LayoutDashboard],['customers',Users],['estimates',FileText],['jobs',CalendarDays],['invoices',Receipt],['settings',Settings]];
-const fUsd=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n)||0);
-const inputs={customers:[['name','text',true],['email','email'],['phone','tel'],['address','text'],['notes','textarea']],estimates:[['customer_id','customer',true],['title','text',true],['description','textarea'],['total','number'],['status','status']],jobs:[['customer_id','customer',true],['title','text',true],['description','textarea'],['scheduled_at','datetime-local'],['status','status']],invoices:[['customer_id','customer',true],['total','number'],['due_date','date'],['status','status']]};
-const statusOpts={estimates:['draft','sent','viewed','approved','changes_requested','declined'],jobs:['scheduled','in_progress','completed','cancelled'],invoices:['draft','sent','paid','void']};
-function defaultData(table){return table==='customers'?{name:'',email:'',phone:'',address:'',notes:''}:table==='estimates'?{title:'',customer_id:'',description:'',total:'',status:'draft'}:table==='jobs'?{title:'',customer_id:'',description:'',scheduled_at:'',status:'scheduled'}:{customer_id:'',total:'',due_date:'',status:'draft'}}
-export default function App(){
- const [lang,setLang]=useState('es'),[ready,setReady]=useState(false),[user,setUser]=useState(null),[company,setCompany]=useState(null),[stage,setStage]=useState('login'),[companyInput,setCompanyInput]=useState(''),[page,setPage]=useState('dashboard'),[menu,setMenu]=useState(false),[rows,setRows]=useState({customers:[],estimates:[],jobs:[],invoices:[]}),[modal,setModal]=useState(null),[form,setForm]=useState({}),[loading,setLoading]=useState(false),[notice,setNotice]=useState(''),[auth,setAuth]=useState({email:'',password:'',company:''}),[search,setSearch]=useState('');
- const t=translations[lang];
- useEffect(()=>{try{const saved=localStorage.getItem('workmivo_language');if(['es','en','pt'].includes(saved))setLang(saved)}catch{}},[]);
- const changeLang=code=>{setLang(code);try{localStorage.setItem('workmivo_language',code)}catch{}};
- const fail=e=>setNotice(e?.message||t.error);
- const loadCompany=useCallback(async(uid)=>{if(!supabase||!uid)return;const {data,error}=await supabase.from('company_members').select('company_id,companies(*)').eq('user_id',uid).limit(1);if(error){fail(error);return}const c=data?.[0]?.companies||null;setCompany(c);setStage(c?'app':'workspace')},[]);
- useEffect(()=>{let live=true;if(!supabase){setReady(true);return}supabase.auth.getSession().then(({data})=>{if(!live)return;const u=data.session?.user||null;setUser(u);if(u)loadCompany(u.id);setReady(true)});const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,s)=>{if(!live)return;const u=s?.user||null;setUser(u);if(u)loadCompany(u.id);else{setCompany(null);setStage('login')}});return()=>{live=false;subscription.unsubscribe()}},[loadCompany]);
- const reload=useCallback(async cid=>{if(!supabase||!cid)return;const result=await Promise.all(['customers','estimates','jobs','invoices'].map(table=>supabase.from(table).select('*').eq('company_id',cid).order('created_at',{ascending:false}).limit(500)));if(result.some(r=>r.error)){fail(result.find(r=>r.error)?.error);return}setRows({customers:result[0].data||[],estimates:result[1].data||[],jobs:result[2].data||[],invoices:result[3].data||[]})},[]);
- useEffect(()=>{if(company?.id)reload(company.id)},[company?.id,reload]);
- async function submitAuth(ev){ev.preventDefault();if(!supabase)return;setLoading(true);setNotice('');try{if(stage==='login'){const {error}=await supabase.auth.signInWithPassword({email:auth.email,password:auth.password});if(error)throw error}else if(stage==='register'){const {error}=await supabase.auth.signUp({email:auth.email,password:auth.password,options:{emailRedirectTo:window.location.origin}});if(error)throw error;setNotice(t.accountCreated);setStage('login')}else if(stage==='forgot'){const {error}=await supabase.auth.resetPasswordForEmail(auth.email,{redirectTo:window.location.origin});if(error)throw error;setNotice(t.resetSent);setStage('login')}}catch(e){fail(e)}finally{setLoading(false)}}
- async function createWorkspace(ev){ev.preventDefault();if(!companyInput.trim())return setNotice(t.workspaceRequired);setLoading(true);setNotice('');const {data,error}=await supabase.rpc('create_my_company',{p_name:companyInput.trim()});if(error)fail(error);else await loadCompany(user.id);setLoading(false)}
- async function saveRecord(ev){ev.preventDefault();const table=modal.table;let values={...form};if(table!=='customers')values.total=values.total===undefined?undefined:Number(values.total||0);if(table==='jobs')values.scheduled_at=values.scheduled_at?new Date(values.scheduled_at).toISOString():null;if(table==='invoices')values.due_date=values.due_date||null;if(table!=='customers'){for(const key of ['total','scheduled_at','due_date'])if(values[key]===undefined)delete values[key]};for(const key of Object.keys(values))if(values[key]==='')values[key]=null;setLoading(true);const payload=modal.id?values:{...values,company_id:company.id};const q=modal.id?supabase.from(table).update(payload).eq('id',modal.id).eq('company_id',company.id):supabase.from(table).insert(payload);const {error}=await q;if(error)fail(error);else{setModal(null);setNotice(t.success);await reload(company.id)}setLoading(false)}
- async function removeRecord(table,id){if(!window.confirm(t.deleteConfirm))return;setLoading(true);const {error}=await supabase.from(table).delete().eq('id',id).eq('company_id',company.id);if(error)fail(error);else await reload(company.id);setLoading(false)}
- function openModal(table,item=null){setForm(item?{...item,scheduled_at:item.scheduled_at?new Date(new Date(item.scheduled_at).getTime()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16):'',due_date:item.due_date||''}:defaultData(table));setModal({table,id:item?.id||null})}
- async function saveCompany(ev){ev.preventDefault();setLoading(true);const {error}=await supabase.from('companies').update({name:company.name,email:company.email||null,phone:company.phone||null,address:company.address||null}).eq('id',company.id);if(error)fail(error);else setNotice(t.success);setLoading(false)}
- const fieldLabel=(key)=>({customer_id:t.customer,total:t.amount,scheduled_at:t.date,due_date:t.dueDate}[key]||t[key]||key);
- const formField=([key,type,req])=><label key={key} className="field"><span>{fieldLabel(key)}</span>{type==='textarea'?<textarea value={form[key]??''} onChange={e=>setForm({...form,[key]:e.target.value})}/>:type==='customer'?<select required={req} value={form[key]||''} onChange={e=>setForm({...form,[key]:e.target.value})}><option value="">{t.selectCustomer}</option>{rows.customers.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select>:type==='status'?<select value={form[key]||'draft'} onChange={e=>setForm({...form,[key]:e.target.value})}>{statusOpts[modal.table].map(s=><option key={s} value={s}>{t[s]}</option>)}</select>:<input required={req} type={type} step={type==='number'?'0.01':undefined} min={type==='number'?'0':undefined} value={form[key]??''} onChange={e=>setForm({...form,[key]:e.target.value})}/>}</label>;
- if(!supabase)return <main className="init"><h2>Workmivo</h2><p>{t.errorConfig}</p><p><code>NEXT_PUBLIC_SUPABASE_URL</code><br/><code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code></p></main>;
- if(!ready)return <div className="init">{t.loading}</div>;
- if(!user || ['login','register','forgot'].includes(stage))return <main className="auth-page"><section className="auth-visual"><div className="auth-brand"><span className="brand-mark">W</span> workmivo<span className="lime">.</span></div><div><span className="overline">WORKMIVO</span><h1>{t.loginSubtitle}</h1><p>{t.dashboardIntro}</p><div className="auth-summary">✓ {t.customers} &nbsp; ✓ {t.estimates} &nbsp; ✓ {t.jobs} &nbsp; ✓ {t.invoices}</div></div><span className="auth-foot">{t.preview}</span></section><section className="auth-form-area"><div className="lang-select"><Globe2 size={17}/><select aria-label={t.language} value={lang} onChange={e=>changeLang(e.target.value)}><option value="es">Español</option><option value="en">English</option><option value="pt">Português</option></select></div><form onSubmit={submitAuth} className="auth-form"><div className="brand-mini">workmivo<span className="lime">.</span></div><h2>{stage==='register'?t.register:stage==='forgot'?t.forgot:t.login}</h2><p>{stage==='register'?t.signupSubtitle:t.loginSubtitle}</p><label className="field"><span>{t.email}</span><input type="email" required value={auth.email} onChange={e=>setAuth({...auth,email:e.target.value})}/></label>{stage!=='forgot'&&<label className="field"><span>{t.password}</span><input type="password" minLength={6} required value={auth.password} onChange={e=>setAuth({...auth,password:e.target.value})}/></label>}{notice&&<p className="notice" role="status">{notice}</p>}<button disabled={loading} className="primary wide">{loading?t.loading:stage==='register'?t.register:stage==='forgot'?t.reset:t.login} <ArrowRight size={18}/></button><div className="auth-switch">{stage==='login'?<><button type="button" onClick={()=>{setStage('register');setNotice('')}}>{t.needAccount} <strong>{t.register}</strong></button><button type="button" onClick={()=>{setStage('forgot');setNotice('')}}>{t.forgot}</button></>:<button type="button" onClick={()=>{setStage('login');setNotice('')}}>{t.haveAccount} <strong>{t.login}</strong></button>}</div></form></section></main>;
- if(!company)return <main className="workspace-screen"><div className="workspace-box"><div className="brand-mini">workmivo<span className="lime">.</span></div><h2>{t.createWorkspace}</h2><p>{t.workspaceRequired}</p><form onSubmit={createWorkspace}><label className="field"><span>{t.company}</span><input required value={companyInput} onChange={e=>setCompanyInput(e.target.value)}/></label><button className="primary wide" disabled={loading}>{loading?t.loading:t.createWorkspace} <ArrowRight size={18}/></button></form>{notice&&<p className="notice">{notice}</p>}</div></main>;
- const tableHeaders={customers:[t.name,t.email,t.phone],estimates:[t.title,t.customer,t.amount,t.status],jobs:[t.title,t.customer,t.date,t.status],invoices:[t.customer,t.amount,t.dueDate,t.status]};
- const findName=id=>rows.customers.find(c=>c.id===id)?.name||'—';
- const tableCell=(item,table,col)=>{if(col===t.customer)return findName(item.customer_id);if(col===t.amount)return fUsd(item.total);if(col===t.status)return <span className={'status status-'+item.status}>{t[item.status]||item.status}</span>;if(col===t.date)return item.scheduled_at?new Date(item.scheduled_at).toLocaleDateString(lang==='pt'?'pt-BR':lang==='es'?'es-US':'en-US'):'—';if(col===t.dueDate)return item.due_date||'—';const key=col===t.name?'name':col===t.email?'email':col===t.phone?'phone':'title';return item[key]||'—'};
- const stats=[{label:t.totalCustomers,value:rows.customers.length,icon:Users},{label:t.openEstimates,value:rows.estimates.filter(x=>!['approved','declined'].includes(x.status)).length,icon:FileText},{label:t.upcomingJobs,value:rows.jobs.filter(x=>!['completed','cancelled'].includes(x.status)).length,icon:CalendarDays},{label:t.unpaidInvoices,value:fUsd(rows.invoices.filter(x=>!['paid','void'].includes(x.status)).reduce((sum,i)=>sum+Number(i.total||0),0)),icon:Receipt}];
- return <div className="app-shell"><aside className={'sidebar '+(menu?'show':'')}><div className="sidebar-top"><div className="brand"> <span className="brand-mark">W</span>workmivo<span className="lime">.</span></div><button className="close-mobile" onClick={()=>setMenu(false)}><X/></button></div><div className="company-box"><BriefcaseBusiness size={17}/><span>{company.name}</span></div><nav>{nav.map(([id,Icon])=><button key={id} className={'nav-item '+(page===id?'active':'')} onClick={()=>{setPage(id);setSearch('');setMenu(false)}}><Icon size={19}/>{t[id]}</button>)}</nav><div className="sidebar-bottom"><div className="small">{user.email}</div><button className="nav-item" onClick={()=>supabase.auth.signOut()}><LogOut size={19}/>{t.logout}</button></div></aside>{menu&&<div className="shade" onClick={()=>setMenu(false)}/>}<main className="main"><header className="topbar"><button className="menu-btn" onClick={()=>setMenu(true)}><Menu size={23}/></button><span className="breadcrumb">{company.name} <span>/</span> {t[page]}</span><div className="top-right"><Globe2 size={17}/><select aria-label={t.language} value={lang} onChange={e=>changeLang(e.target.value)}><option value="es">Español</option><option value="en">English</option><option value="pt">Português</option></select><span className="avatar">{(user.email||'W')[0].toUpperCase()}</span></div></header><div className="content">{notice&&<div className="toast" role="status"><span>{notice}</span><button onClick={()=>setNotice('')}><X size={16}/></button></div>}
- {page==='dashboard'&&<><div className="section-heading"><div><span className="eyebrow">WORKMIVO</span><h1>{t.welcome}</h1><p>{t.dashboardIntro}</p></div><button className="primary" onClick={()=>openModal('customers')}><Plus size={18}/>{t.newCustomer}</button></div><div className="stats-grid">{stats.map((s,i)=><div className="stat" key={i}><div className="stat-icon"><s.icon size={20}/></div><div><span>{s.label}</span><strong>{s.value}</strong></div></div>)}</div><div className="section-heading under"><div><h2>{t.customers}</h2><p>{t.preview}</p></div><button className="secondary" onClick={()=>setPage('customers')}>{t.customers}<ArrowRight size={16}/></button></div><div className="table-wrap"><table><thead><tr><th>{t.name}</th><th>{t.email}</th><th>{t.phone}</th></tr></thead><tbody>{rows.customers.slice(0,5).map(c=><tr key={c.id}><td>{c.name}</td><td>{c.email||'—'}</td><td>{c.phone||'—'}</td></tr>)}{rows.customers.length===0&&<tr><td colSpan="3" className="empty">{t.empty}</td></tr>}</tbody></table></div></>}
- {['customers','estimates','jobs','invoices'].includes(page)&&<><div className="section-heading"><div><span className="eyebrow">WORKMIVO</span><h1>{t[page]}</h1><p>{page==='estimates'?t.estimateHelp:page==='invoices'?t.invoiceHelp:t.dashboardIntro}</p></div><button className="primary" onClick={()=>rows.customers.length===0&&page!=='customers'?setNotice(t.noCustomer):openModal(page)}><Plus size={18}/>{t[{customers:'newCustomer',estimates:'newEstimate',jobs:'newJob',invoices:'newInvoice'}[page]]}</button></div><div className="search-box"><Search size={19}/><input placeholder={t.search} value={search} onChange={e=>setSearch(e.target.value)}/></div><div className="table-wrap"><table><thead><tr>{tableHeaders[page].map(col=><th key={col}>{col}</th>)}<th>{t.actions}</th></tr></thead><tbody>{rows[page].filter(r=>Object.values(r).some(v=>typeof v==='string'&&v.toLowerCase().includes(search.toLowerCase()))||!search).map(r=><tr key={r.id}>{tableHeaders[page].map((col,i)=><td key={i}>{tableCell(r,page,col)}</td>)}<td><div className="actions"><button title={t.edit} onClick={()=>openModal(page,r)}><Pencil size={16}/></button><button title={t.delete} onClick={()=>removeRecord(page,r.id)}><Trash2 size={16}/></button></div></td></tr>)}{rows[page].length===0&&<tr><td colSpan={tableHeaders[page].length+1} className="empty">{t.empty}</td></tr>}</tbody></table></div></>}
- {page==='settings'&&<><div className="section-heading"><div><span className="eyebrow">WORKMIVO</span><h1>{t.settings}</h1><p>{t.companySettings}</p></div></div><form className="settings-form" onSubmit={saveCompany}>{[['name','companyName'],['email','companyEmail'],['phone','companyPhone'],['address','address']].map(([key,label])=><label className="field" key={key}><span>{t[label]}</span><input type={key==='email'?'email':'text'} value={company[key]||''} onChange={e=>setCompany({...company,[key]:e.target.value})}/></label>)}<button className="primary" disabled={loading}>{t.save}<Check size={18}/></button></form><div className="info-note">{t.monthlyLimits}</div></>}
- </div></main>{modal&&<div className="modal-overlay" onClick={()=>setModal(null)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><h2>{modal.id?t.edit:t.add} · {t[modal.table]}</h2><button onClick={()=>setModal(null)}><X size={22}/></button></div><form onSubmit={saveRecord}>{inputs[modal.table].map(formField)}<div className="modal-actions"><button type="button" className="secondary" onClick={()=>setModal(null)}>{t.cancel}</button><button disabled={loading} className="primary">{loading?t.loading:t.save}<Check size={17}/></button></div></form></div></div>}</div>;
+'use client'
+import { useState, useEffect, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
+import { tr } from '@/lib/translations'
+import {
+  LayoutDashboard, Users, FileText, Briefcase, Receipt,
+  Settings, Menu, X, LogOut, Plus, Edit2, Trash2,
+  DollarSign, TrendingUp, Clock, UserCheck, Trash
+} from 'lucide-react'
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const LIMITS = {
+  basico:   { customers: 30,       estimates_month: 10,  dashboard: false, approval: false },
+  pro:      { customers: 300,      estimates_month: 300, dashboard: true,  approval: true  },
+  business: { customers: Infinity, estimates_month: Infinity, dashboard: true, approval: true }
+}
+
+const STATUS_COLOR = {
+  draft: '#6b7280', sent: '#3b82f6', viewed: '#8b5cf6',
+  approved: '#10b981', changes_requested: '#f59e0b', declined: '#ef4444',
+  scheduled: '#3b82f6', in_progress: '#f59e0b', completed: '#10b981', cancelled: '#6b7280',
+  paid: '#10b981', void: '#ef4444', active: '#10b981'
+}
+
+const ESTIMATE_STATUSES = ['draft','sent','viewed','approved','changes_requested','declined']
+const JOB_STATUSES      = ['scheduled','in_progress','completed','cancelled']
+const INVOICE_STATUSES  = ['draft','sent','paid','void']
+const LANGS             = ['es','en','pt']
+const CURRENCIES        = ['USD','MXN','EUR','COP','ARS','CLP','BRL']
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const fCurrency = (n, cur = 'USD') =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: cur || 'USD' }).format(Number(n) || 0)
+
+const fDate = d => d ? new Date(d).toLocaleDateString() : '—'
+
+const Badge = ({ status, label }) => (
+  <span className="badge" style={{
+    background: `${STATUS_COLOR[status] || '#6b7280'}22`,
+    color: STATUS_COLOR[status] || '#6b7280',
+    border: `1px solid ${STATUS_COLOR[status] || '#6b7280'}44`
+  }}>{label}</span>
+)
+
+const newItem = () => ({ id: crypto.randomUUID(), description: '', quantity: 1, unit_price: 0 })
+
+// ─── App ──────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const [lang, setLang] = useState('es')
+  const [stage, setStage] = useState('loading')  // loading|login|register|forgot|workspace|app
+  const [page, setPage] = useState('dashboard')
+  const [user, setUser] = useState(null)
+  const [company, setCompany] = useState(null)
+  const [plan, setPlan] = useState('basico')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  const [customers, setCustomers] = useState([])
+  const [estimates, setEstimates] = useState([])
+  const [jobs, setJobs] = useState([])
+  const [invoices, setInvoices] = useState([])
+  const [stats, setStats] = useState({ customers: 0, paidTotal: 0, activeJobs: 0, pendingEst: 0 })
+
+  const [modal, setModal] = useState(null)
+  const [editing, setEditing] = useState(null)
+  const [form, setForm] = useState({})
+  const [items, setItems] = useState([newItem()])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [msg, setMsg] = useState('')
+  const [search, setSearch] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null)
+
+  const T = k => tr(k, lang)
+  const limits = LIMITS[plan] || LIMITS.basico
+
+  // ─── Init lang ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('wm_lang') : null
+    if (saved && LANGS.includes(saved)) setLang(saved)
+  }, [])
+
+  const changeLang = l => {
+    setLang(l)
+    if (typeof window !== 'undefined') localStorage.setItem('wm_lang', l)
+  }
+
+  // ─── Auth init ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!supabase) { setStage('login'); return }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) { setUser(session.user); loadCompany(session.user) }
+      else setStage('login')
+    })
+    const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') { setUser(null); setCompany(null); setStage('login') }
+    })
+    return () => sub.unsubscribe()
+  }, [])
+
+  // ─── Load company ───────────────────────────────────────────────────────────
+  const loadCompany = async (u) => {
+    try {
+      const { data: member } = await supabase
+        .from('company_members').select('company_id').eq('user_id', u.id).single()
+      if (!member) { setStage('workspace'); return }
+
+      const [{ data: co }, { data: sub }] = await Promise.all([
+        supabase.from('companies').select('*').eq('id', member.company_id).single(),
+        supabase.from('subscriptions').select('*').eq('company_id', member.company_id).single()
+      ])
+      setCompany(co)
+      setPlan(sub?.plan || 'basico')
+      setStage('app')
+      await loadData(co.id)
+    } catch { setStage('login') }
+  }
+
+  // ─── Load data ──────────────────────────────────────────────────────────────
+  const loadData = useCallback(async (cid) => {
+    const id = cid || company?.id
+    if (!id || !supabase) return
+    const [c, e, j, i] = await Promise.all([
+      supabase.from('customers').select('*').eq('company_id', id).order('created_at', { ascending: false }),
+      supabase.from('estimates').select('*, customers(name)').eq('company_id', id).order('created_at', { ascending: false }),
+      supabase.from('jobs').select('*, customers(name)').eq('company_id', id).order('created_at', { ascending: false }),
+      supabase.from('invoices').select('*, customers(name)').eq('company_id', id).order('created_at', { ascending: false })
+    ])
+    const cd = c.data || []; const ed = e.data || []; const jd = j.data || []; const id2 = i.data || []
+    setCustomers(cd); setEstimates(ed); setJobs(jd); setInvoices(id2)
+    setStats({
+      customers: cd.length,
+      paidTotal: id2.filter(x => x.status === 'paid').reduce((s, x) => s + Number(x.total), 0),
+      activeJobs: jd.filter(x => ['scheduled','in_progress'].includes(x.status)).length,
+      pendingEst: ed.filter(x => ['sent','viewed'].includes(x.status)).length
+    })
+  }, [company])
+
+  // ─── Auth handlers ──────────────────────────────────────────────────────────
+  const [authForm, setAuthForm] = useState({ email: '', password: '' })
+
+  const handleLogin = async (e) => {
+    e.preventDefault(); setError(''); setSaving(true)
+    const { error: err } = await supabase.auth.signInWithPassword(authForm)
+    if (err) { setError(T('errorLogin')); setSaving(false); return }
+    const { data: { session } } = await supabase.auth.getSession()
+    setUser(session.user); loadCompany(session.user); setSaving(false)
+  }
+
+  const handleRegister = async (e) => {
+    e.preventDefault(); setError(''); setSaving(true)
+    const { error: err } = await supabase.auth.signUp(authForm)
+    if (err) { setError(err.message); setSaving(false); return }
+    setMsg('Revisa tu correo para confirmar tu cuenta.'); setSaving(false)
+  }
+
+  const handleForgot = async (e) => {
+    e.preventDefault(); setError(''); setSaving(true)
+    const { error: err } = await supabase.auth.resetPasswordForEmail(authForm.email)
+    if (err) { setError(err.message); setSaving(false); return }
+    setMsg(T('checkEmail')); setSaving(false)
+  }
+
+  const handleLogout = async () => { await supabase.auth.signOut() }
+
+  // ─── Workspace ──────────────────────────────────────────────────────────────
+  const handleCreateWorkspace = async (e) => {
+    e.preventDefault(); setError(''); setSaving(true)
+    if (!form.name?.trim()) { setError(T('errorRequired')); setSaving(false); return }
+    const { data: co, error: err } = await supabase.from('companies').insert({ name: form.name, language: lang }).select().single()
+    if (err) { setError(T('errorGeneric')); setSaving(false); return }
+    await supabase.from('company_members').insert({ company_id: co.id, user_id: user.id, role: 'owner' })
+    await supabase.from('subscriptions').insert({ company_id: co.id, plan: 'basico' })
+    setCompany(co); setPlan('basico'); setStage('app'); setSaving(false)
+  }
+
+  // ─── CRUD helpers ───────────────────────────────────────────────────────────
+  const openModal = (type, record = null) => {
+    setModal(type); setEditing(record); setError('')
+    if (type === 'estimates') {
+      setForm(record ? { ...record } : { status: 'draft', subtotal: 0, discount: 0, tax: 0, total: 0 })
+      if (record) {
+        supabase.from('estimate_items').select('*').eq('estimate_id', record.id).order('sort_order')
+          .then(({ data }) => setItems(data?.length ? data : [newItem()]))
+      } else setItems([newItem()])
+    } else {
+      setForm(record ? { ...record } : (type === 'jobs' ? { status: 'scheduled' } : type === 'invoices' ? { status: 'draft', subtotal: 0, discount: 0, tax: 0, total: 0 } : {}))
+    }
+    setMsg('')
+  }
+
+  const closeModal = () => { setModal(null); setEditing(null); setForm({}); setItems([newItem()]); setError('') }
+
+  const setF = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  // ─── Estimate items calc ─────────────────────────────────────────────────────
+  const calcTotals = (its, disc, tax) => {
+    const sub = its.reduce((s, i) => s + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0), 0)
+    const d = Number(disc) || 0
+    const t = Number(tax) || 0
+    const total = sub - d + t
+    return { subtotal: sub, total: Math.max(0, total) }
+  }
+
+  const updateItem = (idx, field, val) => {
+    const updated = items.map((it, i) => i === idx ? { ...it, [field]: val } : it)
+    setItems(updated)
+    const { subtotal, total } = calcTotals(updated, form.discount, form.tax)
+    setForm(f => ({ ...f, subtotal, total }))
+  }
+
+  const addItem = () => setItems(i => [...i, newItem()])
+  const removeItem = idx => {
+    const updated = items.filter((_, i) => i !== idx)
+    setItems(updated.length ? updated : [newItem()])
+    const { subtotal, total } = calcTotals(updated, form.discount, form.tax)
+    setForm(f => ({ ...f, subtotal, total }))
+  }
+
+  // ─── Save estimate ───────────────────────────────────────────────────────────
+  const saveEstimate = async () => {
+    if (!form.title?.trim()) { setError(T('errorRequired')); return }
+
+    // plan limit check (new only)
+    if (!editing) {
+      const thisMonth = estimates.filter(e => new Date(e.created_at).getMonth() === new Date().getMonth()).length
+      if (thisMonth >= limits.estimates_month) { setError(T('limitReached')); return }
+    }
+
+    setSaving(true)
+    const payload = {
+      company_id: company.id, customer_id: form.customer_id || null,
+      title: form.title, description: form.description || null,
+      status: form.status || 'draft',
+      subtotal: form.subtotal || 0, discount: form.discount || 0,
+      tax: form.tax || 0, total: form.total || 0, notes: form.notes || null
+    }
+
+    let estId = editing?.id
+    if (editing) {
+      await supabase.from('estimates').update(payload).eq('id', editing.id)
+    } else {
+      const { data } = await supabase.from('estimates').insert(payload).select().single()
+      estId = data?.id
+    }
+
+    // Save items
+    if (estId) {
+      await supabase.from('estimate_items').delete().eq('estimate_id', estId)
+      const validItems = items.filter(i => i.description?.trim())
+      if (validItems.length) {
+        await supabase.from('estimate_items').insert(
+          validItems.map((it, idx) => ({
+            estimate_id: estId,
+            description: it.description,
+            quantity: Number(it.quantity) || 1,
+            unit_price: Number(it.unit_price) || 0,
+            sort_order: idx
+          }))
+        )
+      }
+    }
+
+    await loadData(); setSaving(false); closeModal()
+  }
+
+  // ─── Save customer ───────────────────────────────────────────────────────────
+  const saveCustomer = async () => {
+    if (!form.name?.trim()) { setError(T('errorRequired')); return }
+    if (!editing && customers.length >= limits.customers) { setError(T('limitReached')); return }
+    setSaving(true)
+    const payload = {
+      company_id: company.id, name: form.name, email: form.email || null,
+      phone: form.phone || null, address: form.address || null,
+      language: form.language || 'es', notes: form.notes || null
+    }
+    if (editing) await supabase.from('customers').update(payload).eq('id', editing.id)
+    else await supabase.from('customers').insert(payload)
+    await loadData(); setSaving(false); closeModal()
+  }
+
+  // ─── Save job ────────────────────────────────────────────────────────────────
+  const saveJob = async () => {
+    if (!form.title?.trim()) { setError(T('errorRequired')); return }
+    setSaving(true)
+    const payload = {
+      company_id: company.id, customer_id: form.customer_id || null,
+      estimate_id: form.estimate_id || null, title: form.title,
+      description: form.description || null, status: form.status || 'scheduled',
+      scheduled_date: form.scheduled_date || null, notes: form.notes || null
+    }
+    if (editing) await supabase.from('jobs').update(payload).eq('id', editing.id)
+    else await supabase.from('jobs').insert(payload)
+    await loadData(); setSaving(false); closeModal()
+  }
+
+  // ─── Save invoice ────────────────────────────────────────────────────────────
+  const saveInvoice = async () => {
+    if (!form.title?.trim()) { setError(T('errorRequired')); return }
+    setSaving(true)
+    const payload = {
+      company_id: company.id, customer_id: form.customer_id || null,
+      job_id: form.job_id || null, estimate_id: form.estimate_id || null,
+      title: form.title, status: form.status || 'draft',
+      subtotal: form.subtotal || 0, discount: form.discount || 0,
+      tax: form.tax || 0, total: form.total || 0,
+      due_date: form.due_date || null, notes: form.notes || null
+    }
+    if (editing) await supabase.from('invoices').update(payload).eq('id', editing.id)
+    else await supabase.from('invoices').insert(payload)
+    await loadData(); setSaving(false); closeModal()
+  }
+
+  // ─── Save settings ───────────────────────────────────────────────────────────
+  const saveSettings = async () => {
+    setSaving(true)
+    await supabase.from('companies').update({
+      name: form.name, email: form.email, phone: form.phone,
+      address: form.address, currency: form.currency, language: form.language
+    }).eq('id', company.id)
+    setCompany(c => ({ ...c, ...form }))
+    setSaving(false); setMsg(T('saved'))
+    setTimeout(() => setMsg(''), 2000)
+  }
+
+  // ─── Delete ──────────────────────────────────────────────────────────────────
+  const handleDelete = async () => {
+    if (!confirmDelete) return
+    await supabase.from(confirmDelete.table).delete().eq('id', confirmDelete.id)
+    setConfirmDelete(null); await loadData()
+  }
+
+  // ─── Quick status change ─────────────────────────────────────────────────────
+  const quickStatus = async (table, id, status) => {
+    await supabase.from(table).update({ status }).eq('id', id)
+    await loadData()
+  }
+
+  // ─── Renders ─────────────────────────────────────────────────────────────────
+
+  if (stage === 'loading') return (
+    <div className="auth-wrap"><p style={{ color: 'var(--text2)' }}>{T('loading')}</p></div>
+  )
+
+  if (stage === 'login') return (
+    <div className="auth-wrap">
+      <div className="auth-box">
+        <div className="auth-logo">Workmivo</div>
+        <div className="auth-sub">{T('tagline')}</div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+          <div className="lang-switch">{LANGS.map(l => (
+            <button key={l} className={`lang-btn ${lang === l ? 'active' : ''}`} onClick={() => changeLang(l)}>{l.toUpperCase()}</button>
+          ))}</div>
+        </div>
+        <h1 className="auth-title">{T('login')}</h1>
+        {error && <div className="alert alert-error">{error}</div>}
+        {msg && <div className="alert alert-success">{msg}</div>}
+        <form onSubmit={handleLogin}>
+          <div className="field"><label>{T('email')}</label>
+            <input type="email" value={authForm.email} onChange={e => setAuthForm(f => ({ ...f, email: e.target.value }))} required /></div>
+          <div className="field"><label>{T('password')}</label>
+            <input type="password" value={authForm.password} onChange={e => setAuthForm(f => ({ ...f, password: e.target.value }))} required /></div>
+          <button type="submit" className="btn btn-primary btn-full" style={{ marginBottom: 12 }} disabled={saving}>{saving ? T('loading') : T('login')}</button>
+        </form>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text2)' }}>
+          <button className="btn-ghost btn" style={{ fontSize: 13, padding: '4px 0' }} onClick={() => { setStage('register'); setError(''); setMsg('') }}>{T('noAccount')} {T('register')}</button>
+          <button className="btn-ghost btn" style={{ fontSize: 13, padding: '4px 0' }} onClick={() => { setStage('forgot'); setError(''); setMsg('') }}>{T('forgotPassword')}</button>
+        </div>
+      </div>
+    </div>
+  )
+
+  if (stage === 'register') return (
+    <div className="auth-wrap">
+      <div className="auth-box">
+        <div className="auth-logo">Workmivo</div>
+        <div className="auth-sub">{T('tagline')}</div>
+        <h1 className="auth-title">{T('register')}</h1>
+        {error && <div className="alert alert-error">{error}</div>}
+        {msg && <div className="alert alert-success">{msg}</div>}
+        <form onSubmit={handleRegister}>
+          <div className="field"><label>{T('email')}</label>
+            <input type="email" value={authForm.email} onChange={e => setAuthForm(f => ({ ...f, email: e.target.value }))} required /></div>
+          <div className="field"><label>{T('password')}</label>
+            <input type="password" value={authForm.password} onChange={e => setAuthForm(f => ({ ...f, password: e.target.value }))} required /></div>
+          <button type="submit" className="btn btn-primary btn-full" style={{ marginBottom: 12 }} disabled={saving}>{saving ? T('loading') : T('register')}</button>
+        </form>
+        <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => { setStage('login'); setError(''); setMsg('') }}>{T('hasAccount')} {T('login')}</button>
+      </div>
+    </div>
+  )
+
+  if (stage === 'forgot') return (
+    <div className="auth-wrap">
+      <div className="auth-box">
+        <div className="auth-logo">Workmivo</div>
+        <h1 className="auth-title">{T('resetPassword')}</h1>
+        {error && <div className="alert alert-error">{error}</div>}
+        {msg && <div className="alert alert-success">{msg}</div>}
+        <form onSubmit={handleForgot}>
+          <div className="field"><label>{T('email')}</label>
+            <input type="email" value={authForm.email} onChange={e => setAuthForm(f => ({ ...f, email: e.target.value }))} required /></div>
+          <button type="submit" className="btn btn-primary btn-full" style={{ marginBottom: 12 }} disabled={saving}>{saving ? T('loading') : T('sendResetLink')}</button>
+        </form>
+        <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => { setStage('login'); setError(''); setMsg('') }}>← {T('login')}</button>
+      </div>
+    </div>
+  )
+
+  if (stage === 'workspace') return (
+    <div className="auth-wrap">
+      <div className="auth-box">
+        <div className="auth-logo">Workmivo</div>
+        <h1 className="auth-title">{T('createWorkspace')}</h1>
+        {error && <div className="alert alert-error">{error}</div>}
+        <form onSubmit={handleCreateWorkspace}>
+          <div className="field"><label>{T('companyName')}</label>
+            <input type="text" value={form.name || ''} onChange={e => setF('name', e.target.value)} required /></div>
+          <button type="submit" className="btn btn-primary btn-full" disabled={saving}>{saving ? T('loading') : T('createAndContinue')}</button>
+        </form>
+      </div>
+    </div>
+  )
+
+  // ─── App ────────────────────────────────────────────────────────────────────
+
+  const cur = company?.currency || 'USD'
+  const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
+  const filteredEstimates = estimates.filter(e => (e.title + (e.customers?.name || '')).toLowerCase().includes(search.toLowerCase()))
+  const filteredJobs = jobs.filter(j => (j.title + (j.customers?.name || '')).toLowerCase().includes(search.toLowerCase()))
+  const filteredInvoices = invoices.filter(i => (i.title + (i.customers?.name || '')).toLowerCase().includes(search.toLowerCase()))
+
+  const navItems = [
+    { id: 'dashboard', label: T('dashboard'), icon: <LayoutDashboard size={16} /> },
+    { id: 'customers', label: T('customers'), icon: <Users size={16} /> },
+    { id: 'estimates', label: T('estimates'), icon: <FileText size={16} /> },
+    { id: 'jobs', label: T('jobs'), icon: <Briefcase size={16} /> },
+    { id: 'invoices', label: T('invoices'), icon: <Receipt size={16} /> },
+    { id: 'settings', label: T('settings'), icon: <Settings size={16} /> },
+  ]
+
+  const renderDashboard = () => {
+    if (!limits.dashboard) return (
+      <div>
+        <div className="upgrade-banner">
+          <p>{T('upgradeForDashboard')}</p>
+        </div>
+        <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(2,1fr)' }}>
+          <div className="stat-card">
+            <div className="stat-label">{T('totalCustomers')}</div>
+            <div className="stat-value">{stats.customers}</div>
+            <div className="stat-sub">{T('of')} {limits.customers}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">{T('pendingEstimates')}</div>
+            <div className="stat-value">{stats.pendingEst}</div>
+          </div>
+        </div>
+      </div>
+    )
+
+    return (
+      <>
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-label">{T('totalRevenue')}</div>
+            <div className="stat-value">{fCurrency(stats.paidTotal, cur)}</div>
+            <div className="stat-sub">{T('invoices')} {T('paid')}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">{T('activeJobs')}</div>
+            <div className="stat-value">{stats.activeJobs}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">{T('pendingEstimates')}</div>
+            <div className="stat-value">{stats.pendingEst}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">{T('totalCustomers')}</div>
+            <div className="stat-value">{stats.customers}</div>
+            {limits.customers !== Infinity && <div className="stat-sub">{T('of')} {limits.customers}</div>}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="table-wrap">
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', fontSize: 14, fontWeight: 600 }}>
+              {T('estimates')} — {T('sent')} / {T('viewed')}
+            </div>
+            <table>
+              <tbody>
+                {estimates.filter(e => ['sent','viewed'].includes(e.status)).slice(0, 5).map(e => (
+                  <tr key={e.id}>
+                    <td>{e.title}</td>
+                    <td><Badge status={e.status} label={T(e.status)} /></td>
+                    <td style={{ textAlign: 'right' }}>{fCurrency(e.total, cur)}</td>
+                  </tr>
+                ))}
+                {!estimates.filter(e => ['sent','viewed'].includes(e.status)).length && (
+                  <tr className="empty-row"><td colSpan={3}>{T('noData')}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="table-wrap">
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', fontSize: 14, fontWeight: 600 }}>
+              {T('jobs')} — {T('in_progress')}
+            </div>
+            <table>
+              <tbody>
+                {jobs.filter(j => j.status === 'in_progress').slice(0, 5).map(j => (
+                  <tr key={j.id}>
+                    <td>{j.title}</td>
+                    <td>{j.customers?.name || '—'}</td>
+                    <td>{fDate(j.scheduled_date)}</td>
+                  </tr>
+                ))}
+                {!jobs.filter(j => j.status === 'in_progress').length && (
+                  <tr className="empty-row"><td colSpan={3}>{T('noData')}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  const renderCustomers = () => (
+    <div className="table-wrap">
+      <div className="table-search">
+        <input placeholder={T('search')} value={search} onChange={e => setSearch(e.target.value)} />
+        <span style={{ fontSize: 13, color: 'var(--text2)', marginLeft: 'auto' }}>
+          {customers.length}{limits.customers !== Infinity ? `/${limits.customers}` : ''}
+        </span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>{T('name')}</th><th>{T('emailField')}</th><th>{T('phone')}</th><th>{T('language')}</th><th></th>
+        </tr></thead>
+        <tbody>
+          {filteredCustomers.map(c => (
+            <tr key={c.id}>
+              <td style={{ fontWeight: 500 }}>{c.name}</td>
+              <td style={{ color: 'var(--text2)' }}>{c.email || '—'}</td>
+              <td style={{ color: 'var(--text2)' }}>{c.phone || '—'}</td>
+              <td><span style={{ fontSize: 12, background: 'var(--dark3)', padding: '2px 8px', borderRadius: 4 }}>{c.language?.toUpperCase()}</span></td>
+              <td><div className="td-actions">
+                <button className="btn btn-ghost btn-sm btn-icon" onClick={() => openModal('customers', c)}><Edit2 size={14} /></button>
+                <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDelete({ table: 'customers', id: c.id })}><Trash2 size={14} /></button>
+              </div></td>
+            </tr>
+          ))}
+          {!filteredCustomers.length && <tr className="empty-row"><td colSpan={5}>{T('noCustomers')}</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  const renderEstimates = () => (
+    <div className="table-wrap">
+      <div className="table-search">
+        <input placeholder={T('search')} value={search} onChange={e => setSearch(e.target.value)} />
+      </div>
+      <table>
+        <thead><tr>
+          <th>{T('title')}</th><th>{T('customer')}</th><th>{T('status')}</th><th>{T('total')}</th><th>{T('createdAt')}</th><th></th>
+        </tr></thead>
+        <tbody>
+          {filteredEstimates.map(e => (
+            <tr key={e.id}>
+              <td style={{ fontWeight: 500 }}>{e.title}</td>
+              <td style={{ color: 'var(--text2)' }}>{e.customers?.name || '—'}</td>
+              <td>
+                <select className="status-select" value={e.status}
+                  style={{ background: `${STATUS_COLOR[e.status]}22`, color: STATUS_COLOR[e.status] }}
+                  onChange={ev => quickStatus('estimates', e.id, ev.target.value)}>
+                  {ESTIMATE_STATUSES.map(s => <option key={s} value={s}>{T(s)}</option>)}
+                </select>
+              </td>
+              <td style={{ fontWeight: 600 }}>{fCurrency(e.total, cur)}</td>
+              <td style={{ color: 'var(--text2)', fontSize: 13 }}>{fDate(e.created_at)}</td>
+              <td><div className="td-actions">
+                <button className="btn btn-ghost btn-sm btn-icon" onClick={() => openModal('estimates', e)}><Edit2 size={14} /></button>
+                <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDelete({ table: 'estimates', id: e.id })}><Trash2 size={14} /></button>
+              </div></td>
+            </tr>
+          ))}
+          {!filteredEstimates.length && <tr className="empty-row"><td colSpan={6}>{T('noEstimates')}</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  const renderJobs = () => (
+    <div className="table-wrap">
+      <div className="table-search">
+        <input placeholder={T('search')} value={search} onChange={e => setSearch(e.target.value)} />
+      </div>
+      <table>
+        <thead><tr>
+          <th>{T('title')}</th><th>{T('customer')}</th><th>{T('status')}</th><th>{T('scheduledDate')}</th><th></th>
+        </tr></thead>
+        <tbody>
+          {filteredJobs.map(j => (
+            <tr key={j.id}>
+              <td style={{ fontWeight: 500 }}>{j.title}</td>
+              <td style={{ color: 'var(--text2)' }}>{j.customers?.name || '—'}</td>
+              <td>
+                <select className="status-select" value={j.status}
+                  style={{ background: `${STATUS_COLOR[j.status]}22`, color: STATUS_COLOR[j.status] }}
+                  onChange={ev => quickStatus('jobs', j.id, ev.target.value)}>
+                  {JOB_STATUSES.map(s => <option key={s} value={s}>{T(s)}</option>)}
+                </select>
+              </td>
+              <td style={{ color: 'var(--text2)', fontSize: 13 }}>{fDate(j.scheduled_date)}</td>
+              <td><div className="td-actions">
+                <button className="btn btn-ghost btn-sm btn-icon" onClick={() => openModal('jobs', j)}><Edit2 size={14} /></button>
+                <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDelete({ table: 'jobs', id: j.id })}><Trash2 size={14} /></button>
+              </div></td>
+            </tr>
+          ))}
+          {!filteredJobs.length && <tr className="empty-row"><td colSpan={5}>{T('noJobs')}</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  const renderInvoices = () => (
+    <div className="table-wrap">
+      <div className="table-search">
+        <input placeholder={T('search')} value={search} onChange={e => setSearch(e.target.value)} />
+      </div>
+      <table>
+        <thead><tr>
+          <th>{T('title')}</th><th>{T('customer')}</th><th>{T('status')}</th><th>{T('total')}</th><th>{T('dueDate')}</th><th></th>
+        </tr></thead>
+        <tbody>
+          {filteredInvoices.map(inv => (
+            <tr key={inv.id}>
+              <td style={{ fontWeight: 500 }}>{inv.title}</td>
+              <td style={{ color: 'var(--text2)' }}>{inv.customers?.name || '—'}</td>
+              <td>
+                <select className="status-select" value={inv.status}
+                  style={{ background: `${STATUS_COLOR[inv.status]}22`, color: STATUS_COLOR[inv.status] }}
+                  onChange={ev => quickStatus('invoices', inv.id, ev.target.value)}>
+                  {INVOICE_STATUSES.map(s => <option key={s} value={s}>{T(s)}</option>)}
+                </select>
+              </td>
+              <td style={{ fontWeight: 600 }}>{fCurrency(inv.total, cur)}</td>
+              <td style={{ color: 'var(--text2)', fontSize: 13 }}>{fDate(inv.due_date)}</td>
+              <td><div className="td-actions">
+                <button className="btn btn-ghost btn-sm btn-icon" onClick={() => openModal('invoices', inv)}><Edit2 size={14} /></button>
+                <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => setConfirmDelete({ table: 'invoices', id: inv.id })}><Trash2 size={14} /></button>
+              </div></td>
+            </tr>
+          ))}
+          {!filteredInvoices.length && <tr className="empty-row"><td colSpan={6}>{T('noInvoices')}</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  const renderSettings = () => (
+    <div style={{ maxWidth: 540 }}>
+      <div className="table-wrap" style={{ padding: 24 }}>
+        <h3 style={{ marginBottom: 20, fontSize: 16 }}>{T('companySettings')}</h3>
+        {msg && <div className="alert alert-success">{msg}</div>}
+        <div className="field"><label>{T('companyName')}</label>
+          <input value={form.name || company?.name || ''} onChange={e => setF('name', e.target.value)} /></div>
+        <div className="field"><label>{T('emailField')}</label>
+          <input type="email" value={form.email || company?.email || ''} onChange={e => setF('email', e.target.value)} /></div>
+        <div className="field"><label>{T('phone')}</label>
+          <input value={form.phone || company?.phone || ''} onChange={e => setF('phone', e.target.value)} /></div>
+        <div className="field"><label>{T('address')}</label>
+          <input value={form.address || company?.address || ''} onChange={e => setF('address', e.target.value)} /></div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="field"><label>{T('currency')}</label>
+            <select value={form.currency || company?.currency || 'USD'} onChange={e => setF('currency', e.target.value)}>
+              {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+            </select></div>
+          <div className="field"><label>{T('language')}</label>
+            <select value={form.language || company?.language || 'es'} onChange={e => setF('language', e.target.value)}>
+              {LANGS.map(l => <option key={l} value={l}>{l.toUpperCase()}</option>)}
+            </select></div>
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16 }}>
+            {T('plan')}: <strong style={{ color: 'var(--lime)' }}>{T(plan)}</strong>
+          </div>
+          <button className="btn btn-primary" onClick={saveSettings} disabled={saving}>{saving ? T('loading') : T('save')}</button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ─── Modal Customer ──────────────────────────────────────────────────────────
+  const renderModalCustomer = () => (
+    <div className="modal-backdrop" onClick={closeModal}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>{editing ? T('edit') : T('newF')} {T('customer')}</h2>
+          <button className="btn btn-ghost btn-icon" onClick={closeModal}><X size={16} /></button>
+        </div>
+        <div className="modal-body">
+          {error && <div className="alert alert-error">{error}</div>}
+          <div className="field"><label>{T('name')} *</label>
+            <input value={form.name || ''} onChange={e => setF('name', e.target.value)} autoFocus /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="field"><label>{T('emailField')}</label>
+              <input type="email" value={form.email || ''} onChange={e => setF('email', e.target.value)} /></div>
+            <div className="field"><label>{T('phone')}</label>
+              <input value={form.phone || ''} onChange={e => setF('phone', e.target.value)} /></div>
+          </div>
+          <div className="field"><label>{T('address')}</label>
+            <input value={form.address || ''} onChange={e => setF('address', e.target.value)} /></div>
+          <div className="field"><label>{T('language')}</label>
+            <select value={form.language || 'es'} onChange={e => setF('language', e.target.value)}>
+              <option value="es">Español</option>
+              <option value="en">English</option>
+              <option value="pt">Português</option>
+            </select></div>
+          <div className="field"><label>{T('notes')}</label>
+            <textarea value={form.notes || ''} onChange={e => setF('notes', e.target.value)} /></div>
+        </div>
+        <div className="modal-foot">
+          <button className="btn btn-secondary" onClick={closeModal}>{T('cancel')}</button>
+          <button className="btn btn-primary" onClick={saveCustomer} disabled={saving}>{saving ? T('loading') : T('save')}</button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ─── Modal Estimate ──────────────────────────────────────────────────────────
+  const renderModalEstimate = () => {
+    const sub = Number(form.subtotal) || 0
+    const disc = Number(form.discount) || 0
+    const tax = Number(form.tax) || 0
+    const total = sub - disc + tax
+
+    return (
+      <div className="modal-backdrop" onClick={closeModal}>
+        <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
+          <div className="modal-head">
+            <h2>{editing ? T('edit') : T('newF')} {T('estimate')}</h2>
+            <button className="btn btn-ghost btn-icon" onClick={closeModal}><X size={16} /></button>
+          </div>
+          <div className="modal-body">
+            {error && <div className="alert alert-error">{error}</div>}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="field"><label>{T('title')} *</label>
+                <input value={form.title || ''} onChange={e => setF('title', e.target.value)} autoFocus /></div>
+              <div className="field"><label>{T('customer')}</label>
+                <select value={form.customer_id || ''} onChange={e => setF('customer_id', e.target.value)}>
+                  <option value="">—</option>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select></div>
+            </div>
+            <div className="field"><label>{T('description')}</label>
+              <textarea value={form.description || ''} onChange={e => setF('description', e.target.value)} style={{ minHeight: 60 }} /></div>
+
+            {/* Line items */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--text2)' }}>{T('items')}</div>
+              <table className="items-table">
+                <thead><tr>
+                  <th style={{ width: '45%' }}>{T('itemDescription')}</th>
+                  <th style={{ width: '15%' }}>{T('quantity')}</th>
+                  <th style={{ width: '20%' }}>{T('unitPrice')}</th>
+                  <th style={{ width: '15%' }}>{T('total')}</th>
+                  <th style={{ width: '5%' }}></th>
+                </tr></thead>
+                <tbody>
+                  {items.map((it, idx) => (
+                    <tr key={it.id}>
+                      <td><input value={it.description} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder={T('itemDescription')} /></td>
+                      <td><input type="number" value={it.quantity} onChange={e => updateItem(idx, 'quantity', e.target.value)} min="0" step="0.01" /></td>
+                      <td><input type="number" value={it.unit_price} onChange={e => updateItem(idx, 'unit_price', e.target.value)} min="0" step="0.01" /></td>
+                      <td><span className="item-total">{fCurrency((Number(it.quantity)||0)*(Number(it.unit_price)||0), cur)}</span></td>
+                      <td><button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--danger)' }} onClick={() => removeItem(idx)}><Trash size={13} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button className="btn btn-secondary btn-sm" onClick={addItem}><Plus size={13} /> {T('addItem')}</button>
+            </div>
+
+            {/* Totals */}
+            <div className="totals-box">
+              <div className="totals-row"><span>{T('subtotal')}</span><span>{fCurrency(sub, cur)}</span></div>
+              <div className="totals-row">
+                <span>{T('discount')}</span>
+                <input type="number" value={form.discount || ''} onChange={e => { setF('discount', e.target.value); const {subtotal,total} = calcTotals(items, e.target.value, form.tax); setForm(f=>({...f,discount:e.target.value,subtotal,total})) }}
+                  style={{ width: 80, background: 'var(--dark)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '4px 8px', fontSize: 13, textAlign: 'right', fontFamily: 'inherit' }} min="0" step="0.01" placeholder="0" />
+              </div>
+              <div className="totals-row">
+                <span>{T('tax')}</span>
+                <input type="number" value={form.tax || ''} onChange={e => { const {subtotal,total} = calcTotals(items, form.discount, e.target.value); setForm(f=>({...f,tax:e.target.value,subtotal,total})) }}
+                  style={{ width: 80, background: 'var(--dark)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '4px 8px', fontSize: 13, textAlign: 'right', fontFamily: 'inherit' }} min="0" step="0.01" placeholder="0" />
+              </div>
+              <div className="totals-row grand"><span>{T('total')}</span><span>{fCurrency(Math.max(0,total), cur)}</span></div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
+              <div className="field"><label>{T('status')}</label>
+                <select value={form.status || 'draft'} onChange={e => setF('status', e.target.value)}>
+                  {ESTIMATE_STATUSES.map(s => <option key={s} value={s}>{T(s)}</option>)}
+                </select></div>
+            </div>
+            <div className="field"><label>{T('notes')}</label>
+              <textarea value={form.notes || ''} onChange={e => setF('notes', e.target.value)} style={{ minHeight: 56 }} /></div>
+          </div>
+          <div className="modal-foot">
+            <button className="btn btn-secondary" onClick={closeModal}>{T('cancel')}</button>
+            <button className="btn btn-primary" onClick={saveEstimate} disabled={saving}>{saving ? T('loading') : T('save')}</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Modal Job ───────────────────────────────────────────────────────────────
+  const renderModalJob = () => (
+    <div className="modal-backdrop" onClick={closeModal}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>{editing ? T('edit') : T('new')} {T('job')}</h2>
+          <button className="btn btn-ghost btn-icon" onClick={closeModal}><X size={16} /></button>
+        </div>
+        <div className="modal-body">
+          {error && <div className="alert alert-error">{error}</div>}
+          <div className="field"><label>{T('title')} *</label>
+            <input value={form.title || ''} onChange={e => setF('title', e.target.value)} autoFocus /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="field"><label>{T('customer')}</label>
+              <select value={form.customer_id || ''} onChange={e => setF('customer_id', e.target.value)}>
+                <option value="">—</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select></div>
+            <div className="field"><label>{T('status')}</label>
+              <select value={form.status || 'scheduled'} onChange={e => setF('status', e.target.value)}>
+                {JOB_STATUSES.map(s => <option key={s} value={s}>{T(s)}</option>)}
+              </select></div>
+          </div>
+          <div className="field"><label>{T('scheduledDate')}</label>
+            <input type="date" value={form.scheduled_date || ''} onChange={e => setF('scheduled_date', e.target.value)} /></div>
+          <div className="field"><label>{T('description')}</label>
+            <textarea value={form.description || ''} onChange={e => setF('description', e.target.value)} /></div>
+          <div className="field"><label>{T('fromEstimate')}</label>
+            <select value={form.estimate_id || ''} onChange={e => setF('estimate_id', e.target.value)}>
+              <option value="">—</option>
+              {estimates.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+            </select></div>
+          <div className="field"><label>{T('notes')}</label>
+            <textarea value={form.notes || ''} onChange={e => setF('notes', e.target.value)} style={{ minHeight: 56 }} /></div>
+        </div>
+        <div className="modal-foot">
+          <button className="btn btn-secondary" onClick={closeModal}>{T('cancel')}</button>
+          <button className="btn btn-primary" onClick={saveJob} disabled={saving}>{saving ? T('loading') : T('save')}</button>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ─── Modal Invoice ───────────────────────────────────────────────────────────
+  const renderModalInvoice = () => (
+    <div className="modal-backdrop" onClick={closeModal}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>{editing ? T('edit') : T('newF')} {T('invoice')}</h2>
+          <button className="btn btn-ghost btn-icon" onClick={closeModal}><X size={16} /></button>
+        </div>
+        <div className="modal-body">
+          {error && <div className="alert alert-error">{error}</div>}
+          <div className="field"><label>{T('title')} *</label>
+            <input value={form.title || ''} onChange={e => setF('title', e.target.value)} autoFocus /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="field"><label>{T('customer')}</label>
+              <select value={form.customer_id || ''} onChange={e => setF('customer_id', e.target.value)}>
+                <option value="">—</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select></div>
+            <div className="field"><label>{T('status')}</label>
+              <select value={form.status || 'draft'} onChange={e => setF('status', e.target.value)}>
+                {INVOICE_STATUSES.map(s => <option key={s} value={s}>{T(s)}</option>)}
+              </select></div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <div className="field"><label>{T('subtotal')}</label>
+              <input type="number" value={form.subtotal || ''} onChange={e => { const v=Number(e.target.value); setForm(f=>({...f,subtotal:v,total:Math.max(0,v-(Number(f.discount)||0)+(Number(f.tax)||0))})) }} min="0" step="0.01" /></div>
+            <div className="field"><label>{T('discount')}</label>
+              <input type="number" value={form.discount || ''} onChange={e => { const v=Number(e.target.value); setForm(f=>({...f,discount:v,total:Math.max(0,(Number(f.subtotal)||0)-v+(Number(f.tax)||0))})) }} min="0" step="0.01" /></div>
+            <div className="field"><label>{T('tax')}</label>
+              <input type="number" value={form.tax || ''} onChange={e => { const v=Number(e.target.value); setForm(f=>({...f,tax:v,total:Math.max(0,(Number(f.subtotal)||0)-(Number(f.discount)||0)+v)})) }} min="0" step="0.01" /></div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="field"><label style={{ color: 'var(--lime)' }}>{T('total')}</label>
+              <input type="number" value={form.total || ''} onChange={e => setF('total', e.target.value)} min="0" step="0.01" style={{ fontWeight: 700, color: 'var(--lime)' }} /></div>
+            <div className="field"><label>{T('dueDate')}</label>
+              <input type="date" value={form.due_date || ''} onChange={e => setF('due_date', e.target.value)} /></div>
+          </div>
+          <div className="field"><label>{T('fromEstimate')}</label>
+            <select value={form.estimate_id || ''} onChange={e => setF('estimate_id', e.target.value)}>
+              <option value="">—</option>
+              {estimates.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+            </select></div>
+          <div className="field"><label>{T('notes')}</label>
+            <textarea value={form.notes || ''} onChange={e => setF('notes', e.target.value)} style={{ minHeight: 56 }} /></div>
+        </div>
+        <div className="modal-foot">
+          <button className="btn btn-secondary" onClick={closeModal}>{T('cancel')}</button>
+          <button className="btn btn-primary" onClick={saveInvoice} disabled={saving}>{saving ? T('loading') : T('save')}</button>
+        </div>
+      </div>
+    </div>
+  )
+
+  const topbarAction = () => {
+    if (page === 'settings') return null
+    const canAdd = page === 'customers' ? customers.length < limits.customers : true
+    const labels = { customers: T('customer'), estimates: T('estimate'), jobs: T('job'), invoices: T('invoice') }
+    return (
+      <button className="btn btn-primary btn-sm" onClick={() => { if (!canAdd) return; openModal(page); setSearch('') }}
+        disabled={!canAdd} title={!canAdd ? T('limitReached') : ''}>
+        <Plus size={14} /> {T('new')} {labels[page]}
+      </button>
+    )
+  }
+
+  return (
+    <div className="app-wrap">
+      {/* Overlay mobile */}
+      <div className={`overlay ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} />
+
+      {/* Sidebar */}
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="sidebar-logo">
+          Workmivo
+          <span>{company?.name}</span>
+        </div>
+        <nav className="sidebar-nav">
+          {navItems.map(n => (
+            <button key={n.id} className={`nav-item ${page === n.id ? 'active' : ''}`}
+              onClick={() => { setPage(n.id); setSidebarOpen(false); setSearch(''); if (n.id === 'settings') setForm({}) }}>
+              {n.icon} {n.label}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <div className="sidebar-plan">{T('plan')}: <strong>{T(plan)}</strong></div>
+          <div className="lang-switch" style={{ marginBottom: 8 }}>
+            {LANGS.map(l => (
+              <button key={l} className={`lang-btn ${lang === l ? 'active' : ''}`} onClick={() => changeLang(l)}>{l.toUpperCase()}</button>
+            ))}
+          </div>
+          <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'flex-start', fontSize: 13 }} onClick={handleLogout}>
+            <LogOut size={14} /> {T('logout')}
+          </button>
+        </div>
+      </aside>
+
+      {/* Main */}
+      <main className="main">
+        <div className="topbar">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button className="btn btn-ghost btn-icon menu-btn" onClick={() => setSidebarOpen(true)}><Menu size={18} /></button>
+            <span className="topbar-title">{navItems.find(n => n.id === page)?.label}</span>
+          </div>
+          <div className="topbar-actions">{topbarAction()}</div>
+        </div>
+
+        <div className="content">
+          {page === 'dashboard' && renderDashboard()}
+          {page === 'customers' && renderCustomers()}
+          {page === 'estimates' && renderEstimates()}
+          {page === 'jobs' && renderJobs()}
+          {page === 'invoices' && renderInvoices()}
+          {page === 'settings' && renderSettings()}
+        </div>
+      </main>
+
+      {/* Modals */}
+      {modal === 'customers' && renderModalCustomer()}
+      {modal === 'estimates' && renderModalEstimate()}
+      {modal === 'jobs' && renderModalJob()}
+      {modal === 'invoices' && renderModalInvoice()}
+
+      {/* Confirm delete */}
+      {confirmDelete && (
+        <div className="modal-backdrop">
+          <div className="confirm-box">
+            <p>{T('confirmDelete')}</p>
+            <div className="confirm-actions">
+              <button className="btn btn-secondary" onClick={() => setConfirmDelete(null)}>{T('cancel')}</button>
+              <button className="btn btn-danger" onClick={handleDelete}>{T('delete')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
