@@ -392,6 +392,74 @@ export default function App() {
   }
 
   // ─── Save invoice ────────────────────────────────────────────────────────────
+  const printPDF = (type) => {
+    const isEstimate = type === 'estimate'
+    const customer = customers.find(c => c.id === form.customer_id)
+    const cur = company?.currency || 'USD'
+    const fmt = v => Number(v || 0).toLocaleString('es-MX', { style: 'currency', currency: cur })
+    const lineRows = isEstimate ? items.filter(i => i.description?.trim()).map(i => `
+      <tr>
+        <td>${i.description || ''}</td>
+        <td style="text-align:right">${Number(i.quantity||0)}</td>
+        <td style="text-align:right">${fmt(i.unit_price)}</td>
+        <td style="text-align:right">${fmt(i.total)}</td>
+      </tr>`).join('') : ''
+    const logoHtml = company?.logo_url ? `<img src="${company.logo_url}" style="height:48px;object-fit:contain;margin-bottom:8px" />` : ''
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>${isEstimate ? 'Presupuesto' : 'Factura'} — ${form.title || ''}</title>
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:sans-serif;font-size:13px;color:#111;padding:40px}
+      h1{font-size:22px;font-weight:700;margin-bottom:4px}
+      .sub{font-size:12px;color:#666}
+      .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px}
+      .company{text-align:right;font-size:12px;color:#444;line-height:1.6}
+      .info{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px}
+      .info-block label{font-size:11px;text-transform:uppercase;color:#999;letter-spacing:.5px;display:block;margin-bottom:2px}
+      .info-block p{font-size:13px;font-weight:600}
+      table{width:100%;border-collapse:collapse;margin-bottom:16px}
+      th{background:#f4f4f4;padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;color:#666}
+      td{padding:8px 10px;border-bottom:1px solid #eee;vertical-align:top}
+      .totals{margin-left:auto;width:240px;margin-top:8px}
+      .totals tr td{border:none;padding:4px 0;font-size:13px}
+      .totals tr td:last-child{text-align:right;font-weight:600}
+      .totals .grand td{font-size:16px;font-weight:700;padding-top:8px;border-top:2px solid #111}
+      .notes{margin-top:28px;padding:12px;background:#f9f9f9;border-radius:4px;font-size:12px;color:#555}
+      @media print{body{padding:20px}button{display:none}}
+    </style></head><body>
+    <div class="header">
+      <div>${logoHtml}<h1>${isEstimate ? 'PRESUPUESTO' : 'FACTURA'}</h1><p class="sub">#${form.id?.slice(-6)?.toUpperCase() || '—'}</p></div>
+      <div class="company">
+        <strong>${company?.name || ''}</strong><br>
+        ${company?.email || ''}${company?.email && company?.phone ? '<br>' : ''}${company?.phone || ''}${company?.address ? '<br>' + company.address : ''}
+      </div>
+    </div>
+    <div class="info">
+      <div class="info-block"><label>${customer ? 'Cliente' : ''}</label><p>${customer?.name || '—'}</p>${customer?.email ? '<p style="font-size:12px;color:#666">'+customer.email+'</p>' : ''}${customer?.phone ? '<p style="font-size:12px;color:#666">'+customer.phone+'</p>' : ''}</div>
+      <div class="info-block">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div><label>${isEstimate ? 'Fecha' : 'Emisión'}</label><p>${new Date().toLocaleDateString('es-MX')}</p></div>
+          ${!isEstimate && form.due_date ? `<div><label>Vencimiento</label><p>${new Date(form.due_date+'T12:00').toLocaleDateString('es-MX')}</p></div>` : ''}
+          ${isEstimate && form.valid_until ? `<div><label>Válido hasta</label><p>${new Date(form.valid_until+'T12:00').toLocaleDateString('es-MX')}</p></div>` : ''}
+          <div><label>Estado</label><p>${form.status || ''}</p></div>
+        </div>
+      </div>
+    </div>
+    ${isEstimate ? `<table><thead><tr><th>Descripción</th><th style="text-align:right">Cant.</th><th style="text-align:right">Precio unit.</th><th style="text-align:right">Total</th></tr></thead><tbody>${lineRows}</tbody></table>` : ''}
+    <table class="totals"><tbody>
+      <tr><td>Subtotal</td><td>${fmt(form.subtotal)}</td></tr>
+      ${Number(form.discount) ? `<tr><td>Descuento</td><td>-${fmt(form.discount)}</td></tr>` : ''}
+      ${Number(form.tax) ? `<tr><td>Impuesto</td><td>${fmt(form.tax)}</td></tr>` : ''}
+      <tr class="grand"><td>Total</td><td>${fmt(form.total)}</td></tr>
+    </tbody></table>
+    ${form.notes ? `<div class="notes"><strong>Notas:</strong> ${form.notes}</div>` : ''}
+    </body></html>`
+    const w = window.open('', '_blank')
+    w.document.write(html)
+    w.document.close()
+    setTimeout(() => w.print(), 400)
+  }
+
   const saveInvoice = async () => {
     if (!form.title?.trim()) { setError(T('errorRequired')); return }
     setSaving(true)
@@ -1096,6 +1164,7 @@ export default function App() {
           </div>
           <div className="modal-foot">
             <button className="btn btn-secondary" onClick={closeModal}>{T('cancel')}</button>
+            {editing && <button className="btn btn-secondary" onClick={() => printPDF('estimate')} style={{ marginLeft: 'auto', marginRight: 8 }}>⬇ PDF</button>}
             <button className="btn btn-primary" onClick={saveEstimate} disabled={saving}>{saving ? T('loading') : T('save')}</button>
           </div>
         </div>
@@ -1189,6 +1258,7 @@ export default function App() {
         </div>
         <div className="modal-foot">
           <button className="btn btn-secondary" onClick={closeModal}>{T('cancel')}</button>
+          {editing && <button className="btn btn-secondary" onClick={() => printPDF('invoice')} style={{ marginLeft: 'auto', marginRight: 8 }}>⬇ PDF</button>}
           <button className="btn btn-primary" onClick={saveInvoice} disabled={saving}>{saving ? T('loading') : T('save')}</button>
         </div>
       </div>
