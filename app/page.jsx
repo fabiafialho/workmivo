@@ -993,7 +993,7 @@ export default function App() {
   )
 
   const topbarAction = () => {
-    if (page === 'settings') return null
+    if (page === 'settings' || page === 'dashboard') return null
     const canAdd = page === 'customers' ? customers.length < limits.customers : true
     const labels = { customers: T('customer'), estimates: T('estimate'), jobs: T('job'), invoices: T('invoice') }
     return (
