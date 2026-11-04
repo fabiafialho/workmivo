@@ -36,6 +36,13 @@ const fCurrency = (n, cur = 'USD') =>
 
 const fDate = d => d ? new Date(d).toLocaleDateString() : '—'
 
+const Logo = ({ size = 32 }) => (
+  <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+    <path d="M4 8 L9 27 L13 17 L18 27 L23 8" stroke="#0d3330" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" opacity="0.6"/>
+    <path d="M15 8 L26 27" stroke="#c6fa4b" strokeWidth="4.5" strokeLinecap="round"/>
+  </svg>
+)
+
 const Badge = ({ status, label }) => (
   <span className="badge" style={{
     background: `${STATUS_COLOR[status] || '#6b7280'}22`,
@@ -347,7 +354,7 @@ export default function App() {
   if (stage === 'login') return (
     <div className="auth-wrap">
       <div className="auth-box">
-        <div className="auth-logo">Workmivo</div>
+        <div className="auth-logo"><Logo /><span className="auth-logo-name">Workmivo</span></div>
         <div className="auth-sub">{T('tagline')}</div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
           <div className="lang-switch">{LANGS.map(l => (
@@ -375,7 +382,7 @@ export default function App() {
   if (stage === 'register') return (
     <div className="auth-wrap">
       <div className="auth-box">
-        <div className="auth-logo">Workmivo</div>
+        <div className="auth-logo"><Logo /><span className="auth-logo-name">Workmivo</span></div>
         <div className="auth-sub">{T('tagline')}</div>
         <h1 className="auth-title">{T('register')}</h1>
         {error && <div className="alert alert-error">{error}</div>}
@@ -395,7 +402,7 @@ export default function App() {
   if (stage === 'forgot') return (
     <div className="auth-wrap">
       <div className="auth-box">
-        <div className="auth-logo">Workmivo</div>
+        <div className="auth-logo"><Logo /><span className="auth-logo-name">Workmivo</span></div>
         <h1 className="auth-title">{T('resetPassword')}</h1>
         {error && <div className="alert alert-error">{error}</div>}
         {msg && <div className="alert alert-success">{msg}</div>}
@@ -412,7 +419,7 @@ export default function App() {
   if (stage === 'workspace') return (
     <div className="auth-wrap">
       <div className="auth-box">
-        <div className="auth-logo">Workmivo</div>
+        <div className="auth-logo"><Logo /><span className="auth-logo-name">Workmivo</span></div>
         <h1 className="auth-title">{T('createWorkspace')}</h1>
         {error && <div className="alert alert-error">{error}</div>}
         <form onSubmit={handleCreateWorkspace}>
@@ -936,10 +943,13 @@ export default function App() {
 
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="sidebar-logo">
-          Workmivo
-          <span>{company?.name}</span>
-        </div>
+      <div className="sidebar-logo">
+  <svg className="sidebar-logo-svg" viewBox="0 0 36 36" fill="none">
+    <path d="M4 8 L9 27 L13 17 L18 27 L23 8" stroke="rgba(255,255,255,0.45)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M15 8 L26 27" stroke="#c6fa4b" strokeWidth="4.5" strokeLinecap="round"/>
+  </svg>
+  <span className="sidebar-logo-name">Work<em>mivo</em></span>
+</div>
         <nav className="sidebar-nav">
           {navItems.map(n => (
             <button key={n.id} className={`nav-item ${page === n.id ? 'active' : ''}`}
