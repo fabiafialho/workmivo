@@ -30,17 +30,17 @@ html, body { height: 100%; font-family: 'Poppins', sans-serif; background: var(-
   display: flex;
   align-items: center;
   justify-content: center;
+  background: #0d3330;
   padding: 24px;
-  background: var(--bg);
 }
+
 .auth-box {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 36px 32px;
   width: 100%;
   max-width: 400px;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 40px 36px;
-  box-shadow: 0 4px 24px rgba(13,51,48,.07);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
 }
 
 /* Logo no auth */
@@ -53,8 +53,11 @@ html, body { height: 100%; font-family: 'Poppins', sans-serif; background: var(-
 .auth-logo-svg { width: 36px; height: 36px; flex-shrink: 0; }
 .auth-logo-name { font-size: 20px; font-weight: 700; color: var(--dark); }
 
-.auth-sub { color: var(--text2); font-size: 14px; margin-bottom: 32px; }
-.auth-title { font-size: 20px; font-weight: 600; color: var(--dark); margin-bottom: 24px; }
+.auth-sub {
+  color: #5a7a6a;
+  font-size: 14px;
+  margin-bottom: 20px;
+}.auth-title { font-size: 20px; font-weight: 600; color: var(--dark); margin-bottom: 24px; }
 
 /* ── FORM ───────────────────────────────────────────────────────────────────── */
 .field { margin-bottom: 16px; }
