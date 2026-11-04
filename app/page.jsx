@@ -307,12 +307,15 @@ export default function App() {
     }
 
     setSaving(true)
+    const needsToken = (form.status === 'sent') && !editing?.approval_token
+    const token = needsToken ? crypto.randomUUID() : undefined
     const payload = {
       company_id: company.id, customer_id: form.customer_id || null,
       title: form.title, description: form.description || null,
       status: form.status || 'draft',
       subtotal: form.subtotal || 0, discount: form.discount || 0,
-      tax: form.tax || 0, total: form.total || 0, notes: form.notes || null
+      tax: form.tax || 0, total: form.total || 0, notes: form.notes || null,
+      ...(token ? { approval_token: token } : {})
     }
 
     let estId = editing?.id
@@ -1165,6 +1168,7 @@ export default function App() {
           <div className="modal-foot">
             <button className="btn btn-secondary" onClick={closeModal}>{T('cancel')}</button>
             {editing && <button className="btn btn-secondary" onClick={() => printPDF('estimate')} style={{ marginLeft: 'auto', marginRight: 8 }}>⬇ PDF</button>}
+            {editing && editing.approval_token && <button className="btn btn-secondary" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/p/${editing.approval_token}`); alert('Link copiado!') }} style={{ marginRight: 8 }}>🔗 Link</button>}
             <button className="btn btn-primary" onClick={saveEstimate} disabled={saving}>{saving ? T('loading') : T('save')}</button>
           </div>
         </div>
