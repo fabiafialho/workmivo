@@ -674,7 +674,7 @@ export default function App() {
 
   const navItems = [
     { id: 'dashboard', label: T('dashboard'), icon: <LayoutDashboard size={16} /> },
-    { id: 'customers', label: T('customers'), icon: <Users size={16} /> },
+    { id: 'customers', label: '🧪 ' + T('customers'), icon: <Users size={16} /> },
     { id: 'estimates', label: T('estimates'), icon: <FileText size={16} /> },
     { id: 'jobs', label: T('jobs'), icon: <Briefcase size={16} /> },
     { id: 'invoices', label: T('invoices'), icon: <Receipt size={16} /> },
