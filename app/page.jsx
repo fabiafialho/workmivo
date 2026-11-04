@@ -37,10 +37,7 @@ const fCurrency = (n, cur = 'USD') =>
 const fDate = d => d ? new Date(d).toLocaleDateString() : '—'
 
 const Logo = ({ size = 32 }) => (
-  <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-    <path d="M4 8 L9 27 L13 17 L18 27 L23 8" stroke="#0d3330" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" opacity="0.6"/>
-    <path d="M15 8 L26 27" stroke="#c6fa4b" strokeWidth="4.5" strokeLinecap="round"/>
-  </svg>
+  <img src="/logo.png" width={size} height={size} alt="Workmivo" style={{ objectFit: 'contain' }} />
 )
 
 const Badge = ({ status, label }) => (
@@ -944,11 +941,7 @@ export default function App() {
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
       <div className="sidebar-logo">
-  <svg className="sidebar-logo-svg" viewBox="0 0 36 36" fill="none">
-    <path d="M4 8 L9 27 L13 17 L18 27 L23 8" stroke="rgba(255,255,255,0.45)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M15 8 L26 27" stroke="#c6fa4b" strokeWidth="4.5" strokeLinecap="round"/>
-  </svg>
-  <span className="sidebar-logo-name">Work<em>mivo</em></span>
+  <img src="/logo.png" alt="Workmivo" style={{ height: 36, objectFit: 'contain' }} />
 </div>
         <nav className="sidebar-nav">
           {navItems.map(n => (
