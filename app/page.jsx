@@ -1168,7 +1168,7 @@ export default function App() {
           <div className="modal-foot">
             <button className="btn btn-secondary" onClick={closeModal}>{T('cancel')}</button>
             {editing && <button className="btn btn-secondary" onClick={() => printPDF('estimate')} style={{ marginLeft: 'auto', marginRight: 8 }}>⬇ PDF</button>}
-            {editing && editing.approval_token && <button className="btn btn-secondary" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/p/${editing.approval_token}`); alert('Link copiado!') }} style={{ marginRight: 8 }}>🔗 Link</button>}
+            {editing && (editing.approval_token || form.approval_token) && <button className="btn btn-secondary" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/p/${editing.approval_token || form.approval_token}`); alert('Link copiado!') }} style={{ marginRight: 8 }}>🔗 Link</button>}
             <button className="btn btn-primary" onClick={saveEstimate} disabled={saving}>{saving ? T('loading') : T('save')}</button>
           </div>
         </div>
