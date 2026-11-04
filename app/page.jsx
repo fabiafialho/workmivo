@@ -81,7 +81,11 @@ const newItem = () => ({ id: crypto.randomUUID(), description: '', quantity: 1, 
 
 export default function App() {
   const [lang, setLang] = useState('es')
-  const [stage, setStage] = useState('loading')  // loading|login|register|forgot|workspace|app
+  const [stage, setStage] = useState('loading')  // loading|login|register|forgot|workspace|onboarding|app
+  const [onboardStep, setOnboardStep] = useState(1)
+  const [logoFile, setLogoFile] = useState(null)
+  const [logoPreview, setLogoPreview] = useState(null)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
   const [page, setPage] = useState('dashboard')
   const [user, setUser] = useState(null)
   const [company, setCompany] = useState(null)
@@ -144,8 +148,8 @@ export default function App() {
       ])
       setCompany(co)
       setPlan(sub?.plan || 'basico')
-      setStage('app')
-      await loadData(co.id)
+      if (!co.onboarded) { setForm({ ...co }); setStage('onboarding') }
+      else { setStage('app'); await loadData(co.id) }
     } catch { setStage('login') }
   }
 
@@ -204,7 +208,7 @@ export default function App() {
     if (err) { setError(T('errorGeneric')); setSaving(false); return }
     await supabase.from('company_members').insert({ company_id: co.id, user_id: user.id, role: 'owner' })
     await supabase.from('subscriptions').insert({ company_id: co.id, plan: 'basico' })
-    setCompany(co); setPlan('basico'); setStage('app'); setSaving(false)
+    setCompany(co); setPlan('basico'); setForm({ name: co.name }); setStage('onboarding'); setSaving(false)
   }
 
   // ─── CRUD helpers ───────────────────────────────────────────────────────────
@@ -369,6 +373,50 @@ export default function App() {
     await loadData()
   }
 
+  // ─── Onboarding ─────────────────────────────────────────────────────────────
+  const handleLogoChange = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setLogoFile(file)
+    setLogoPreview(URL.createObjectURL(file))
+  }
+
+  const handleOnboardSave = async () => {
+    setSaving(true); setError('')
+    let logo_url = company?.logo_url || null
+
+    if (logoFile) {
+      setUploadingLogo(true)
+      const ext = logoFile.name.split('.').pop()
+      const path = `${company.id}/logo.${ext}`
+      const { error: upErr } = await supabase.storage.from('logos').upload(path, logoFile, { upsert: true })
+      if (upErr) { setError('Erro ao subir logo.'); setSaving(false); setUploadingLogo(false); return }
+      const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(path)
+      logo_url = publicUrl
+      setUploadingLogo(false)
+    }
+
+    const payload = {
+      name: form.name || company.name,
+      email: form.email || null,
+      phone: form.phone || null,
+      address: form.address || null,
+      cnpj: form.cnpj || null,
+      currency: form.currency || 'USD',
+      language: form.language || lang,
+      payment_terms: form.payment_terms || null,
+      estimate_validity_days: Number(form.estimate_validity_days) || 15,
+      logo_url,
+      onboarded: true
+    }
+
+    await supabase.from('companies').update(payload).eq('id', company.id)
+    setCompany(c => ({ ...c, ...payload }))
+    setSaving(false)
+    setStage('app')
+    await loadData(company.id)
+  }
+
   // ─── Renders ─────────────────────────────────────────────────────────────────
 
   if (stage === 'loading') return (
@@ -451,6 +499,107 @@ export default function App() {
             <input type="text" value={form.name || ''} onChange={e => setF('name', e.target.value)} required /></div>
           <button type="submit" className="btn btn-primary btn-full" disabled={saving}>{saving ? T('loading') : T('createAndContinue')}</button>
         </form>
+      </div>
+    </div>
+  )
+
+  if (stage === 'onboarding') return (
+    <div className="auth-wrap">
+      <div className="auth-box" style={{ maxWidth: 480 }}>
+        <div className="auth-logo"><Logo /><span className="auth-logo-name">Workmivo</span></div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24, marginTop: 8 }}>
+          {[1,2].map(s => (
+            <div key={s} style={{ flex: 1, height: 4, borderRadius: 2, background: onboardStep >= s ? 'var(--lime)' : 'rgba(255,255,255,0.15)' }} />
+          ))}
+        </div>
+
+        {error && <div className="alert alert-error">{error}</div>}
+
+        {onboardStep === 1 && (
+          <>
+            <h1 className="auth-title" style={{ marginBottom: 4 }}>
+              {lang === 'pt' ? 'Sua empresa' : lang === 'en' ? 'Your company' : 'Tu empresa'}
+            </h1>
+            <div className="auth-sub" style={{ marginBottom: 20 }}>
+              {lang === 'pt' ? 'Essas informações aparecem nos seus orçamentos e faturas.' : lang === 'en' ? 'This info appears on your estimates and invoices.' : 'Esta info aparece en tus presupuestos y facturas.'}
+            </div>
+
+            {/* Logo upload */}
+            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ width: 72, height: 72, borderRadius: 12, background: 'rgba(255,255,255,0.08)', border: '2px dashed rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                {logoPreview
+                  ? <img src={logoPreview} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                  : <span style={{ fontSize: 28 }}>🏢</span>}
+              </div>
+              <div>
+                <label style={{ cursor: 'pointer' }}>
+                  <div className="btn btn-secondary btn-sm" style={{ display: 'inline-flex' }}>
+                    {lang === 'pt' ? 'Subir logo' : lang === 'en' ? 'Upload logo' : 'Subir logo'}
+                  </div>
+                  <input type="file" accept="image/*" onChange={handleLogoChange} style={{ display: 'none' }} />
+                </label>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>PNG, JPG ou SVG</div>
+              </div>
+            </div>
+
+            <div className="field"><label>{lang === 'pt' ? 'Nome da empresa' : lang === 'en' ? 'Company name' : 'Nombre de la empresa'} *</label>
+              <input value={form.name || ''} onChange={e => setF('name', e.target.value)} /></div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="field"><label>{T('phone')}</label>
+                <input value={form.phone || ''} onChange={e => setF('phone', e.target.value)} /></div>
+              <div className="field"><label>{T('emailField')}</label>
+                <input type="email" value={form.email || ''} onChange={e => setF('email', e.target.value)} /></div>
+            </div>
+            <div className="field"><label>{T('address')}</label>
+              <input value={form.address || ''} onChange={e => setF('address', e.target.value)} /></div>
+            <div className="field"><label>{lang === 'pt' ? 'CNPJ / CPF' : 'RFC / NIT / RUT'}</label>
+              <input value={form.cnpj || ''} onChange={e => setF('cnpj', e.target.value)} placeholder={lang === 'pt' ? '00.000.000/0001-00' : ''} /></div>
+
+            <button className="btn btn-primary btn-full" style={{ marginTop: 8 }} onClick={() => { if (!form.name?.trim()) { setError(T('errorRequired')); return } setError(''); setOnboardStep(2) }}>
+              {lang === 'pt' ? 'Continuar' : lang === 'en' ? 'Continue' : 'Continuar'} →
+            </button>
+          </>
+        )}
+
+        {onboardStep === 2 && (
+          <>
+            <h1 className="auth-title" style={{ marginBottom: 4 }}>
+              {lang === 'pt' ? 'Preferências' : lang === 'en' ? 'Preferences' : 'Preferencias'}
+            </h1>
+            <div className="auth-sub" style={{ marginBottom: 20 }}>
+              {lang === 'pt' ? 'Padrões usados em novos orçamentos.' : lang === 'en' ? 'Defaults used in new estimates.' : 'Valores por defecto en nuevos presupuestos.'}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="field"><label>{T('currency')}</label>
+                <select value={form.currency || 'USD'} onChange={e => setF('currency', e.target.value)}>
+                  {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+                </select></div>
+              <div className="field"><label>{T('language')}</label>
+                <select value={form.language || lang} onChange={e => setF('language', e.target.value)}>
+                  <option value="es">Español</option>
+                  <option value="en">English</option>
+                  <option value="pt">Português</option>
+                </select></div>
+            </div>
+
+            <div className="field">
+              <label>{lang === 'pt' ? 'Validade do orçamento (dias)' : lang === 'en' ? 'Estimate validity (days)' : 'Validez del presupuesto (días)'}</label>
+              <input type="number" value={form.estimate_validity_days || 15} onChange={e => setF('estimate_validity_days', e.target.value)} min="1" /></div>
+
+            <div className="field">
+              <label>{lang === 'pt' ? 'Condições de pagamento padrão' : lang === 'en' ? 'Default payment terms' : 'Condiciones de pago por defecto'}</label>
+              <input value={form.payment_terms || ''} onChange={e => setF('payment_terms', e.target.value)}
+                placeholder={lang === 'pt' ? 'Ex: 50% entrada, 50% na entrega' : lang === 'en' ? 'e.g. 50% upfront, 50% on delivery' : 'Ej: 50% anticipo, 50% al finalizar'} /></div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+              <button className="btn btn-secondary" onClick={() => setOnboardStep(1)}>← {lang === 'pt' ? 'Voltar' : lang === 'en' ? 'Back' : 'Volver'}</button>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleOnboardSave} disabled={saving}>
+                {saving ? (uploadingLogo ? (lang === 'pt' ? 'Subindo logo...' : 'Uploading...') : T('loading')) : (lang === 'pt' ? 'Entrar no app' : lang === 'en' ? 'Enter app' : 'Entrar al app')}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -1012,8 +1161,11 @@ export default function App() {
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
       <div className="sidebar-logo">
-  <img src="/logo.png" alt="Workmivo" style={{ height: 32, objectFit: 'contain' }} />
-</div>
+        <img src="/logo.png" alt="Workmivo" style={{ height: 32, objectFit: 'contain' }} />
+        {company?.logo_url && (
+          <img src={company.logo_url} alt={company.name} style={{ height: 28, objectFit: 'contain', marginLeft: 8, borderLeft: '1px solid rgba(255,255,255,0.15)', paddingLeft: 8, maxWidth: 80 }} />
+        )}
+      </div>
         <nav className="sidebar-nav">
           {navItems.map(n => (
             <button key={n.id} className={`nav-item ${page === n.id ? 'active' : ''}`}
