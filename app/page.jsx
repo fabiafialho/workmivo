@@ -40,6 +40,33 @@ const Logo = ({ size = 32 }) => (
   <img src="/logo.png" width={size} height={size} alt="Workmivo" style={{ objectFit: 'contain' }} />
 )
 
+// Avatar with initials
+const Avatar = ({ name, size = 32 }) => {
+  const initials = (name || '?').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
+  const colors = ['#2d6a4f','#1e6091','#7b2d8b','#b5451b','#1a535c','#4a4e69','#2b6cb0','#276749']
+  const idx = (name || '').charCodeAt(0) % colors.length
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      width: size, height: size, borderRadius: '50%',
+      background: colors[idx], color: '#fff',
+      fontSize: size * 0.38, fontWeight: 700, flexShrink: 0,
+      letterSpacing: 0.5
+    }}>{initials}</span>
+  )
+}
+
+// Empty state
+const EmptyState = ({ icon, title, sub }) => (
+  <tr>
+    <td colSpan={99} style={{ padding: '48px 24px', textAlign: 'center' }}>
+      <div style={{ fontSize: 36, marginBottom: 10 }}>{icon}</div>
+      <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>{title}</div>
+      {sub && <div style={{ fontSize: 13, color: 'var(--text2)' }}>{sub}</div>}
+    </td>
+  </tr>
+)
+
 const Badge = ({ status, label }) => (
   <span className="badge" style={{
     background: `${STATUS_COLOR[status] || '#6b7280'}22`,
@@ -488,6 +515,45 @@ export default function App() {
           </div>
         </div>
 
+        {/* Revenue bar chart */}
+        {(() => {
+          const now = new Date()
+          const months = Array.from({ length: 6 }, (_, i) => {
+            const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1)
+            return { year: d.getFullYear(), month: d.getMonth(), label: d.toLocaleString(lang === 'pt' ? 'pt-BR' : lang === 'es' ? 'es-MX' : 'en-US', { month: 'short' }) }
+          })
+          const data = months.map(m => ({
+            label: m.label,
+            value: invoices.filter(inv => inv.status === 'paid' && new Date(inv.created_at).getFullYear() === m.year && new Date(inv.created_at).getMonth() === m.month)
+              .reduce((s, inv) => s + Number(inv.total), 0)
+          }))
+          const maxVal = Math.max(...data.map(d => d.value), 1)
+          const chartH = 80
+          return (
+            <div className="table-wrap" style={{ padding: '16px 20px 12px' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text2)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {T('totalRevenue')} — {T('paid')}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: chartH + 20 }}>
+                {data.map((d, i) => (
+                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>
+                      {d.value > 0 ? fCurrency(d.value, cur).replace(/\.00$/, '') : ''}
+                    </div>
+                    <div style={{
+                      width: '100%', borderRadius: '4px 4px 0 0',
+                      height: Math.max(4, (d.value / maxVal) * chartH),
+                      background: i === 5 ? 'var(--lime)' : 'var(--dark3)',
+                      transition: 'height 0.3s ease'
+                    }} />
+                    <div style={{ fontSize: 11, color: 'var(--text2)', textTransform: 'capitalize' }}>{d.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div className="table-wrap">
             <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', fontSize: 14, fontWeight: 600 }}>
@@ -503,7 +569,7 @@ export default function App() {
                   </tr>
                 ))}
                 {!estimates.filter(e => ['sent','viewed'].includes(e.status)).length && (
-                  <tr className="empty-row"><td colSpan={3}>{T('noData')}</td></tr>
+                  <EmptyState icon="📋" title={T('noData')} sub={T('noEstimates')} />
                 )}
               </tbody>
             </table>
@@ -522,7 +588,7 @@ export default function App() {
                   </tr>
                 ))}
                 {!jobs.filter(j => j.status === 'in_progress').length && (
-                  <tr className="empty-row"><td colSpan={3}>{T('noData')}</td></tr>
+                  <EmptyState icon="🔧" title={T('noData')} sub={T('noJobs')} />
                 )}
               </tbody>
             </table>
@@ -547,7 +613,12 @@ export default function App() {
         <tbody>
           {filteredCustomers.map(c => (
             <tr key={c.id}>
-              <td style={{ fontWeight: 500 }}>{c.name}</td>
+              <td style={{ fontWeight: 500 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Avatar name={c.name} size={30} />
+                  {c.name}
+                </div>
+              </td>
               <td style={{ color: 'var(--text2)' }}>{c.email || '—'}</td>
               <td style={{ color: 'var(--text2)' }}>{c.phone || '—'}</td>
               <td><span style={{ fontSize: 12, background: 'var(--dark3)', padding: '2px 8px', borderRadius: 4 }}>{c.language?.toUpperCase()}</span></td>
@@ -557,7 +628,7 @@ export default function App() {
               </div></td>
             </tr>
           ))}
-          {!filteredCustomers.length && <tr className="empty-row"><td colSpan={5}>{T('noCustomers')}</td></tr>}
+          {!filteredCustomers.length && <EmptyState icon="👥" title={T('noCustomers')} sub={lang === 'es' ? 'Agrega tu primer cliente para comenzar.' : lang === 'pt' ? 'Adicione seu primeiro cliente para começar.' : 'Add your first customer to get started.'} />}
         </tbody>
       </table>
     </div>
@@ -592,7 +663,7 @@ export default function App() {
               </div></td>
             </tr>
           ))}
-          {!filteredEstimates.length && <tr className="empty-row"><td colSpan={6}>{T('noEstimates')}</td></tr>}
+          {!filteredEstimates.length && <EmptyState icon="📋" title={T('noEstimates')} sub={lang === 'es' ? 'Crea tu primer presupuesto.' : lang === 'pt' ? 'Crie seu primeiro orçamento.' : 'Create your first estimate.'} />}
         </tbody>
       </table>
     </div>
@@ -626,7 +697,7 @@ export default function App() {
               </div></td>
             </tr>
           ))}
-          {!filteredJobs.length && <tr className="empty-row"><td colSpan={5}>{T('noJobs')}</td></tr>}
+          {!filteredJobs.length && <EmptyState icon="🔧" title={T('noJobs')} sub={lang === 'es' ? 'Ningún trabajo programado aún.' : lang === 'pt' ? 'Nenhum trabalho agendado ainda.' : 'No jobs scheduled yet.'} />}
         </tbody>
       </table>
     </div>
@@ -661,7 +732,7 @@ export default function App() {
               </div></td>
             </tr>
           ))}
-          {!filteredInvoices.length && <tr className="empty-row"><td colSpan={6}>{T('noInvoices')}</td></tr>}
+          {!filteredInvoices.length && <EmptyState icon="🧾" title={T('noInvoices')} sub={lang === 'es' ? 'Ninguna factura creada aún.' : lang === 'pt' ? 'Nenhuma fatura criada ainda.' : 'No invoices created yet.'} />}
         </tbody>
       </table>
     </div>
