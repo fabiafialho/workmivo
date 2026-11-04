@@ -67,6 +67,46 @@ const EmptyState = ({ icon, title, sub }) => (
   </tr>
 )
 
+const InlineNewCustomer = ({ value, onChange, customers, inlineCustomer, setInlineCustomer, saveInlineCustomer, savingCustomer, lang }) => (
+  <div>
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <select value={value || ''} onChange={e => {
+        if (e.target.value === '__new__') { setInlineCustomer({ name: '', phone: '', email: '' }); return }
+        onChange(e.target.value)
+      }} style={{ flex: 1 }}>
+        <option value="">—</option>
+        <option value="__new__">＋ {lang === 'pt' ? 'Novo cliente' : lang === 'en' ? 'New customer' : 'Nuevo cliente'}</option>
+        {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+    </div>
+    {inlineCustomer !== null && (
+      <div style={{ marginTop: 10, padding: 12, background: 'var(--dark3)', borderRadius: 8, border: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          {lang === 'pt' ? 'Novo cliente' : lang === 'en' ? 'New customer' : 'Nuevo cliente'}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+          <input placeholder={lang === 'pt' ? 'Nome *' : lang === 'en' ? 'Name *' : 'Nombre *'}
+            value={inlineCustomer.name} autoFocus
+            onChange={e => setInlineCustomer(c => ({ ...c, name: e.target.value }))}
+            style={{ gridColumn: '1 / -1' }} />
+          <input placeholder={lang === 'pt' ? 'Telefone' : 'Teléfono'}
+            value={inlineCustomer.phone}
+            onChange={e => setInlineCustomer(c => ({ ...c, phone: e.target.value }))} />
+          <input placeholder={lang === 'pt' ? 'Email' : 'Correo'}
+            value={inlineCustomer.email}
+            onChange={e => setInlineCustomer(c => ({ ...c, email: e.target.value }))} />
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary btn-sm" onClick={() => setInlineCustomer(null)}>✕</button>
+          <button className="btn btn-primary btn-sm" onClick={saveInlineCustomer} disabled={savingCustomer || !inlineCustomer.name?.trim()}>
+            {savingCustomer ? '...' : (lang === 'pt' ? 'Salvar' : lang === 'en' ? 'Save' : 'Guardar')}
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
+)
+
 const Badge = ({ status, label }) => (
   <span className="badge" style={{
     background: `${STATUS_COLOR[status] || '#6b7280'}22`,
@@ -107,6 +147,8 @@ export default function App() {
   const [msg, setMsg] = useState('')
   const [search, setSearch] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [inlineCustomer, setInlineCustomer] = useState(null) // null | { name, phone, email }
+  const [savingCustomer, setSavingCustomer] = useState(false)
 
   const T = k => tr(k, lang)
   const limits = LIMITS[plan] || LIMITS.basico
@@ -226,7 +268,7 @@ export default function App() {
     setMsg('')
   }
 
-  const closeModal = () => { setModal(null); setEditing(null); setForm({}); setItems([newItem()]); setError('') }
+  const closeModal = () => { setModal(null); setEditing(null); setForm({}); setItems([newItem()]); setError(''); setInlineCustomer(null) }
 
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -299,6 +341,24 @@ export default function App() {
     }
 
     await loadData(); setSaving(false); closeModal()
+  }
+
+  // ─── Save inline customer (from inside a modal) ──────────────────────────────
+  const saveInlineCustomer = async () => {
+    if (!inlineCustomer?.name?.trim()) return
+    setSavingCustomer(true)
+    const payload = {
+      company_id: company.id, name: inlineCustomer.name,
+      phone: inlineCustomer.phone || null, email: inlineCustomer.email || null,
+      language: lang
+    }
+    const { data } = await supabase.from('customers').insert(payload).select().single()
+    if (data) {
+      await loadData()
+      setF('customer_id', data.id)
+    }
+    setInlineCustomer(null)
+    setSavingCustomer(false)
   }
 
   // ─── Save customer ───────────────────────────────────────────────────────────
@@ -977,10 +1037,8 @@ export default function App() {
               <div className="field"><label>{T('title')} *</label>
                 <input value={form.title || ''} onChange={e => setF('title', e.target.value)} autoFocus /></div>
               <div className="field"><label>{T('customer')}</label>
-                <select value={form.customer_id || ''} onChange={e => setF('customer_id', e.target.value)}>
-                  <option value="">—</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select></div>
+                <InlineNewCustomer value={form.customer_id} onChange={v => setF('customer_id', v)} customers={customers} inlineCustomer={inlineCustomer} setInlineCustomer={setInlineCustomer} saveInlineCustomer={saveInlineCustomer} savingCustomer={savingCustomer} lang={lang} />
+              </div>
             </div>
             <div className="field"><label>{T('description')}</label>
               <textarea value={form.description || ''} onChange={e => setF('description', e.target.value)} style={{ minHeight: 60 }} /></div>
@@ -1059,10 +1117,8 @@ export default function App() {
             <input value={form.title || ''} onChange={e => setF('title', e.target.value)} autoFocus /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="field"><label>{T('customer')}</label>
-              <select value={form.customer_id || ''} onChange={e => setF('customer_id', e.target.value)}>
-                <option value="">—</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select></div>
+              <InlineNewCustomer value={form.customer_id} onChange={v => setF('customer_id', v)} customers={customers} inlineCustomer={inlineCustomer} setInlineCustomer={setInlineCustomer} saveInlineCustomer={saveInlineCustomer} savingCustomer={savingCustomer} lang={lang} />
+            </div>
             <div className="field"><label>{T('status')}</label>
               <select value={form.status || 'scheduled'} onChange={e => setF('status', e.target.value)}>
                 {JOB_STATUSES.map(s => <option key={s} value={s}>{T(s)}</option>)}
@@ -1102,10 +1158,8 @@ export default function App() {
             <input value={form.title || ''} onChange={e => setF('title', e.target.value)} autoFocus /></div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div className="field"><label>{T('customer')}</label>
-              <select value={form.customer_id || ''} onChange={e => setF('customer_id', e.target.value)}>
-                <option value="">—</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select></div>
+              <InlineNewCustomer value={form.customer_id} onChange={v => setF('customer_id', v)} customers={customers} inlineCustomer={inlineCustomer} setInlineCustomer={setInlineCustomer} saveInlineCustomer={saveInlineCustomer} savingCustomer={savingCustomer} lang={lang} />
+            </div>
             <div className="field"><label>{T('status')}</label>
               <select value={form.status || 'draft'} onChange={e => setF('status', e.target.value)}>
                 {INVOICE_STATUSES.map(s => <option key={s} value={s}>{T(s)}</option>)}
