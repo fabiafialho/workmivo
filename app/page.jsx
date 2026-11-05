@@ -220,6 +220,18 @@ export default function App() {
     })
   }, [company])
 
+  // ─── Realtime ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!company?.id || !supabase) return
+    const channel = supabase.channel(`realtime-${company.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers',  filter: `company_id=eq.${company.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'estimates',  filter: `company_id=eq.${company.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs',       filter: `company_id=eq.${company.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices',   filter: `company_id=eq.${company.id}` }, () => loadData())
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [company?.id])
+
   // ─── Auth handlers ──────────────────────────────────────────────────────────
   const [authForm, setAuthForm] = useState({ email: '', password: '' })
 
