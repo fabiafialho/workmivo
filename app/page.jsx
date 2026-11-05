@@ -701,7 +701,7 @@ export default function App() {
   if (stage === 'login') return (
     <div className="auth-wrap">
       <div className="auth-box">
-        <div className="auth-logo"><Logo /><span className="auth-logo-name">Workmivo</span></div>
+        <div className="auth-logo"><Logo size={52} /></div>
         <div className="auth-sub">{T('tagline')}</div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
           <div className="lang-switch">{LANGS.map(l => (
@@ -729,7 +729,7 @@ export default function App() {
   if (stage === 'register') return (
     <div className="auth-wrap">
       <div className="auth-box">
-        <div className="auth-logo"><Logo /><span className="auth-logo-name">Workmivo</span></div>
+        <div className="auth-logo"><Logo size={52} /></div>
         <div className="auth-sub">{T('tagline')}</div>
         <h1 className="auth-title">{T('register')}</h1>
         {error && <div className="alert alert-error">{error}</div>}
@@ -749,7 +749,7 @@ export default function App() {
   if (stage === 'forgot') return (
     <div className="auth-wrap">
       <div className="auth-box">
-        <div className="auth-logo"><Logo /><span className="auth-logo-name">Workmivo</span></div>
+        <div className="auth-logo"><Logo size={52} /></div>
         <h1 className="auth-title">{T('resetPassword')}</h1>
         {error && <div className="alert alert-error">{error}</div>}
         {msg && <div className="alert alert-success">{msg}</div>}
@@ -766,7 +766,7 @@ export default function App() {
   if (stage === 'workspace') return (
     <div className="auth-wrap">
       <div className="auth-box">
-        <div className="auth-logo"><Logo /><span className="auth-logo-name">Workmivo</span></div>
+        <div className="auth-logo"><Logo size={52} /></div>
         <h1 className="auth-title">{T('createWorkspace')}</h1>
         {error && <div className="alert alert-error">{error}</div>}
         <form onSubmit={handleCreateWorkspace}>
@@ -781,7 +781,7 @@ export default function App() {
   if (stage === 'onboarding') return (
     <div className="auth-wrap">
       <div className="auth-box" style={{ maxWidth: 480 }}>
-        <div className="auth-logo"><Logo /><span className="auth-logo-name">Workmivo</span></div>
+        <div className="auth-logo"><Logo size={52} /></div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 24, marginTop: 8 }}>
           {[1,2].map(s => (
             <div key={s} style={{ flex: 1, height: 4, borderRadius: 2, background: onboardStep >= s ? 'var(--lime)' : 'rgba(255,255,255,0.15)' }} />
