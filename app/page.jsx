@@ -979,7 +979,7 @@ export default function App() {
               ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10).map((item, i) => (
                 <div key={i} onClick={item.action} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
                   <span style={{ flex: 1, fontSize: 13 }}>{item.label}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap' }}>{item.date ? new Date(item.date).toLocaleDateString('pt-BR') : ''}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap' }}>{item.date ? `${new Date(item.date).toLocaleDateString('pt-BR')} ${new Date(item.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</span>
                 </div>
               ))}
               {![...estimates.filter(e => ['approved','declined'].includes(e.status)), ...invoices.filter(i => i.status === 'paid'), ...jobs.filter(j => j.status === 'completed')].length && (
