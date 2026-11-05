@@ -270,6 +270,36 @@ export default function App() {
     return () => supabase.removeChannel(channel)
   }, [company?.id])
 
+  // ─── Push Notifications (PWA) ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!company?.id || typeof window === 'undefined') return
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+
+    const registerPush = async () => {
+      try {
+        const reg = await navigator.serviceWorker.register('/sw.js')
+        const permission = await Notification.requestPermission()
+        if (permission !== 'granted') return
+
+        const existing = await reg.pushManager.getSubscription()
+        const sub = existing || await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        })
+
+        // Salva subscription no Supabase (upsert por conteúdo)
+        await supabase.from('push_subscriptions').upsert({
+          company_id: company.id,
+          subscription: sub.toJSON()
+        }, { onConflict: 'company_id' })
+      } catch (e) {
+        console.warn('Push registration failed:', e)
+      }
+    }
+
+    registerPush()
+  }, [company?.id])
+
   // ─── Auth handlers ──────────────────────────────────────────────────────────
   const [authForm, setAuthForm] = useState({ email: '', password: '' })
 

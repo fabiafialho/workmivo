@@ -52,6 +52,26 @@ export default function PortalPage({ params }) {
       ? { status: 'approved', approved_at: new Date().toISOString() }
       : { status: 'rejected', rejected_at: new Date().toISOString() }
     await supabase.from('estimates').update(payload).eq('approval_token', token)
+
+    // Envia push notification para a empresa
+    try {
+      const { data: subs } = await supabase
+        .from('push_subscriptions')
+        .select('subscription')
+        .eq('company_id', estimate.company_id)
+      if (subs?.length) {
+        const title = action === 'approved' ? '✅ Orçamento aprovado!' : '❌ Orçamento recusado'
+        const body = `${customer?.name || 'Cliente'} ${action === 'approved' ? 'aprovou' : 'recusou'}: "${estimate.title}"`
+        for (const row of subs) {
+          await fetch('/api/send-push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscription: row.subscription, title, body, url: '/' })
+          })
+        }
+      }
+    } catch (e) { /* push opcional, não bloqueia */ }
+
     setDone(action)
     setActing(false)
   }
