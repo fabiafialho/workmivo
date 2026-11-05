@@ -12,7 +12,7 @@ import {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const LIMITS = {
-  basico:   { customers: 30,       estimates_month: 10,  dashboard: true, approval: true },
+  basico:   { customers: 30,       estimates_month: 10,  dashboard: false, approval: false },
   pro:      { customers: 300,      estimates_month: 300, dashboard: true,  approval: true  },
   business: { customers: Infinity, estimates_month: Infinity, dashboard: true, approval: true }
 }
