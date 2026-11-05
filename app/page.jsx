@@ -318,6 +318,7 @@ export default function App() {
       status: form.status || 'draft',
       subtotal: form.subtotal || 0, discount: form.discount || 0,
       tax: form.tax || 0, total: form.total || 0, notes: form.notes || null,
+      followup_date: form.followup_date || null,
       ...(token ? { approval_token: token } : {})
     }
 
@@ -390,7 +391,9 @@ export default function App() {
       company_id: company.id, customer_id: form.customer_id || null,
       estimate_id: form.estimate_id || null, title: form.title,
       description: form.description || null, status: form.status || 'scheduled',
-      scheduled_date: form.scheduled_date || null, notes: form.notes || null
+      scheduled_date: form.scheduled_date || null,
+      scheduled_time: form.scheduled_time || null,
+      notes: form.notes || null
     }
     if (editing) await supabase.from('jobs').update(payload).eq('id', editing.id)
     else await supabase.from('jobs').insert(payload)
@@ -775,8 +778,39 @@ export default function App() {
       </div>
     )
 
+    const todayStr = new Date().toISOString().slice(0,10)
+    const jobsToday = jobs.filter(j => j.scheduled_date === todayStr).sort((a,b) => (a.scheduled_time||'').localeCompare(b.scheduled_time||''))
+    const overdueFollowups = estimates.filter(e => e.followup_date && e.followup_date <= todayStr && ['draft','sent','viewed'].includes(e.status))
+
     return (
       <>
+        {(jobsToday.length > 0 || overdueFollowups.length > 0) && (
+          <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {jobsToday.length > 0 && (
+              <div style={{ background: '#1a3a2a', border: '1px solid #2d6a4f', borderRadius: 8, padding: '12px 16px' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--lime)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>🔧 Trabalhos hoje</div>
+                {jobsToday.map(j => (
+                  <div key={j.id} onClick={() => openModal('jobs', j)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    {j.scheduled_time && <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--lime)', minWidth: 44 }}>{j.scheduled_time.slice(0,5)}</span>}
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{j.title}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text2)', marginLeft: 'auto' }}>{j.customers?.name || ''}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {overdueFollowups.length > 0 && (
+              <div style={{ background: '#2a1a0a', border: '1px solid #b5451b', borderRadius: 8, padding: '12px 16px' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#f97316', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>📞 Retorno pendente</div>
+                {overdueFollowups.map(e => (
+                  <div key={e.id} onClick={() => openModal('estimates', e)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{e.title}</span>
+                    <span style={{ fontSize: 12, color: '#f97316', marginLeft: 'auto' }}>{new Date(e.followup_date+'T12:00').toLocaleDateString('pt-BR')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="stats-grid">
           <div className="stat-card">
             <div className="stat-label">{T('totalRevenue')}</div>
@@ -989,7 +1023,7 @@ export default function App() {
                 <div style={{ fontSize: 12, fontWeight: isToday(day) ? 700 : 400, color: isToday(day) ? 'var(--lime)' : 'var(--text2)', marginBottom: 4 }}>{day}</div>
                 {(jobsByDay[day] || []).map(j => (
                   <div key={j.id} onClick={() => openModal('jobs', j)} style={{ fontSize: 11, background: `${STATUS_COLOR[j.status] || '#888'}22`, color: STATUS_COLOR[j.status] || 'var(--text)', borderRadius: 4, padding: '2px 6px', marginBottom: 2, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {j.title}
+                    {j.scheduled_time && <span style={{ opacity: 0.7, marginRight: 4 }}>{j.scheduled_time.slice(0,5)}</span>}{j.title}
                   </div>
                 ))}
               </>}
@@ -1220,6 +1254,8 @@ export default function App() {
                   {ESTIMATE_STATUSES.map(s => <option key={s} value={s}>{T(s)}</option>)}
                 </select></div>
             </div>
+            <div className="field"><label>📅 Data de retorno</label>
+              <input type="date" value={form.followup_date || ''} onChange={e => setF('followup_date', e.target.value)} /></div>
             <div className="field"><label>{T('notes')}</label>
               <textarea value={form.notes || ''} onChange={e => setF('notes', e.target.value)} style={{ minHeight: 56 }} /></div>
           </div>
@@ -1255,8 +1291,12 @@ export default function App() {
                 {JOB_STATUSES.map(s => <option key={s} value={s}>{T(s)}</option>)}
               </select></div>
           </div>
-          <div className="field"><label>{T('scheduledDate')}</label>
-            <input type="date" value={form.scheduled_date || ''} onChange={e => setF('scheduled_date', e.target.value)} /></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="field"><label>{T('scheduledDate')}</label>
+              <input type="date" value={form.scheduled_date || ''} onChange={e => setF('scheduled_date', e.target.value)} /></div>
+            <div className="field"><label>Horário</label>
+              <input type="time" value={form.scheduled_time || ''} onChange={e => setF('scheduled_time', e.target.value)} /></div>
+          </div>
           <div className="field"><label>{T('description')}</label>
             <textarea value={form.description || ''} onChange={e => setF('description', e.target.value)} /></div>
           <div className="field"><label>{T('fromEstimate')}</label>
