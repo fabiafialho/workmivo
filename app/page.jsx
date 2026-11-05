@@ -154,6 +154,13 @@ export default function App() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [inlineCustomer, setInlineCustomer] = useState(null) // null | { name, phone, email }
   const [savingCustomer, setSavingCustomer] = useState(false)
+  const [toasts, setToasts] = useState([])
+
+  const addToast = (msg, type = 'info') => {
+    const id = Date.now()
+    setToasts(t => [...t, { id, msg, type }])
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 5000)
+  }
 
   const T = k => tr(k, lang)
   const limits = LIMITS[plan] || LIMITS.basico
@@ -223,11 +230,42 @@ export default function App() {
   // ─── Realtime ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!company?.id || !supabase) return
+
+    const handleChange = (table, payload) => {
+      loadData()
+      const { eventType, new: n, old: o } = payload
+      // só notifica mudanças relevantes, não o próprio usuário criando (detectado pelo lag)
+      if (eventType === 'UPDATE') {
+        if (table === 'estimates') {
+          if (o?.status !== n?.status) {
+            const labels = { approved: '✅ Orçamento aprovado pelo cliente', rejected: '❌ Orçamento recusado pelo cliente', sent: '📤 Orçamento marcado como enviado' }
+            const lbl = labels[n?.status]
+            if (lbl) addToast(`${lbl}: "${n?.title || ''}"`, n?.status === 'approved' ? 'success' : n?.status === 'rejected' ? 'error' : 'info')
+          }
+        }
+        if (table === 'jobs') {
+          if (o?.status !== n?.status) {
+            const labels = { completed: '✅ Job concluído', in_progress: '🔧 Job em andamento', scheduled: '📅 Job agendado' }
+            const lbl = labels[n?.status]
+            if (lbl) addToast(`${lbl}: "${n?.title || ''}"`, n?.status === 'completed' ? 'success' : 'info')
+          }
+        }
+        if (table === 'invoices') {
+          if (o?.status !== n?.status && n?.status === 'paid') {
+            addToast(`💰 Fatura paga: "${n?.title || ''}"`, 'success')
+          }
+        }
+      }
+      if (eventType === 'INSERT') {
+        if (table === 'customers') addToast(`👤 Novo cliente: "${n?.name || ''}"`, 'info')
+      }
+    }
+
     const channel = supabase.channel(`realtime-${company.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers',  filter: `company_id=eq.${company.id}` }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'estimates',  filter: `company_id=eq.${company.id}` }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs',       filter: `company_id=eq.${company.id}` }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices',   filter: `company_id=eq.${company.id}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers',  filter: `company_id=eq.${company.id}` }, p => handleChange('customers', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'estimates',  filter: `company_id=eq.${company.id}` }, p => handleChange('estimates', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs',       filter: `company_id=eq.${company.id}` }, p => handleChange('jobs', p))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices',   filter: `company_id=eq.${company.id}` }, p => handleChange('invoices', p))
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [company?.id])
@@ -1509,6 +1547,26 @@ export default function App() {
 
   return (
     <div className="app-wrap">
+      {/* Toasts */}
+      {toasts.length > 0 && (
+        <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 340 }}>
+          {toasts.map(t => (
+            <div key={t.id} onClick={() => setToasts(ts => ts.filter(x => x.id !== t.id))}
+              style={{
+                background: t.type === 'success' ? 'var(--success)' : t.type === 'error' ? '#dc2626' : 'var(--dark)',
+                color: '#fff', padding: '10px 14px', borderRadius: 10,
+                fontSize: 13, fontWeight: 500, cursor: 'pointer',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+                animation: 'slideIn 0.2s ease',
+                display: 'flex', alignItems: 'center', gap: 8
+              }}>
+              <span style={{ flex: 1 }}>{t.msg}</span>
+              <span style={{ opacity: 0.6, fontSize: 11 }}>✕</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Overlay mobile */}
       <div className={`overlay ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} />
 
