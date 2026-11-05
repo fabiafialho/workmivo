@@ -137,6 +137,8 @@ export default function App() {
   const [estimates, setEstimates] = useState([])
   const [jobs, setJobs] = useState([])
   const [invoices, setInvoices] = useState([])
+  const [tasks, setTasks] = useState(() => { try { return JSON.parse(localStorage.getItem('wm_tasks') || '[]') } catch { return [] } })
+  const [newTask, setNewTask] = useState('')
   const [stats, setStats] = useState({ customers: 0, paidTotal: 0, activeJobs: 0, pendingEst: 0 })
 
   const [modal, setModal] = useState(null)
@@ -399,6 +401,16 @@ export default function App() {
     else await supabase.from('jobs').insert(payload)
     await loadData(); setSaving(false); closeModal()
   }
+
+  // ─── Tasks (localStorage) ───────────────────────────────────────────────────
+  const saveTasks = (t) => { setTasks(t); localStorage.setItem('wm_tasks', JSON.stringify(t)) }
+  const addTask = () => {
+    if (!newTask.trim()) return
+    saveTasks([{ id: Date.now(), text: newTask.trim(), done: false, created: new Date().toISOString() }, ...tasks])
+    setNewTask('')
+  }
+  const toggleTask = (id) => saveTasks(tasks.map(t => t.id === id ? { ...t, done: !t.done } : t))
+  const deleteTask = (id) => saveTasks(tasks.filter(t => t.id !== id))
 
   // ─── Convert estimate → job ──────────────────────────────────────────────────
   const convertEstimateToJob = async () => {
@@ -918,43 +930,84 @@ export default function App() {
         })()}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {/* Tarefas */}
+          <div className="table-wrap">
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+              ✅ Tarefas
+              <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text2)' }}>{tasks.filter(t => !t.done).length} pendentes</span>
+            </div>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8 }}>
+              <input value={newTask} onChange={e => setNewTask(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTask()}
+                placeholder="Nova tarefa..." style={{ flex: 1, background: 'var(--dark3)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', color: 'var(--text)', fontSize: 13 }} />
+              <button onClick={addTask} className="btn btn-primary btn-sm">+</button>
+            </div>
+            <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+              {tasks.length === 0 && <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text2)', fontSize: 13 }}>Nenhuma tarefa ainda</div>}
+              {tasks.map(t => (
+                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderBottom: '1px solid var(--border)', opacity: t.done ? 0.5 : 1 }}>
+                  <input type="checkbox" checked={t.done} onChange={() => toggleTask(t.id)} style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--lime)' }} />
+                  <span style={{ flex: 1, fontSize: 13, textDecoration: t.done ? 'line-through' : 'none' }}>{t.text}</span>
+                  <button onClick={() => deleteTask(t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text2)', fontSize: 16, lineHeight: 1 }}>×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Atividade recente */}
+          <div className="table-wrap">
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', fontSize: 14, fontWeight: 600 }}>
+              🕐 Atividade recente
+            </div>
+            <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+              {[
+                ...estimates.filter(e => e.status === 'approved').map(e => ({ type: 'approved', label: `✅ Orçamento aprovado: ${e.title}`, date: e.approved_at || e.updated_at, action: () => openModal('estimates', e) })),
+                ...estimates.filter(e => e.status === 'declined').map(e => ({ type: 'declined', label: `❌ Orçamento rejeitado: ${e.title}`, date: e.rejected_at || e.updated_at, action: () => openModal('estimates', e) })),
+                ...invoices.filter(i => i.status === 'paid').map(i => ({ type: 'paid', label: `💰 Fatura paga: ${i.title}`, date: i.updated_at, action: () => openModal('invoices', i) })),
+                ...jobs.filter(j => j.status === 'completed').map(j => ({ type: 'completed', label: `🔧 Job concluído: ${j.title}`, date: j.updated_at, action: () => openModal('jobs', j) })),
+              ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10).map((item, i) => (
+                <div key={i} onClick={item.action} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
+                  <span style={{ flex: 1, fontSize: 13 }}>{item.label}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap' }}>{item.date ? new Date(item.date).toLocaleDateString('pt-BR') : ''}</span>
+                </div>
+              ))}
+              {![...estimates.filter(e => ['approved','declined'].includes(e.status)), ...invoices.filter(i => i.status === 'paid'), ...jobs.filter(j => j.status === 'completed')].length && (
+                <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text2)', fontSize: 13 }}>Nenhuma atividade ainda</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Orçamentos em aberto + Jobs em andamento */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
           <div className="table-wrap">
             <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', fontSize: 14, fontWeight: 600 }}>
               {T('estimates')} — {T('sent')} / {T('viewed')}
             </div>
-            <table>
-              <tbody>
-                {estimates.filter(e => ['sent','viewed'].includes(e.status)).slice(0, 5).map(e => (
-                  <tr key={e.id}>
-                    <td>{e.title}</td>
-                    <td><Badge status={e.status} label={T(e.status)} /></td>
-                    <td style={{ textAlign: 'right' }}>{fCurrency(e.total, cur)}</td>
-                  </tr>
-                ))}
-                {!estimates.filter(e => ['sent','viewed'].includes(e.status)).length && (
-                  <EmptyState icon="📋" title={T('noData')} sub={T('noEstimates')} />
-                )}
-              </tbody>
-            </table>
+            <table><tbody>
+              {estimates.filter(e => ['sent','viewed'].includes(e.status)).slice(0, 5).map(e => (
+                <tr key={e.id} onClick={() => openModal('estimates', e)} style={{ cursor: 'pointer' }}>
+                  <td>{e.title}</td>
+                  <td><Badge status={e.status} label={T(e.status)} /></td>
+                  <td style={{ textAlign: 'right' }}>{fCurrency(e.total, cur)}</td>
+                </tr>
+              ))}
+              {!estimates.filter(e => ['sent','viewed'].includes(e.status)).length && <EmptyState icon="📋" title={T('noData')} sub={T('noEstimates')} />}
+            </tbody></table>
           </div>
           <div className="table-wrap">
             <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', fontSize: 14, fontWeight: 600 }}>
               {T('jobs')} — {T('in_progress')}
             </div>
-            <table>
-              <tbody>
-                {jobs.filter(j => j.status === 'in_progress').slice(0, 5).map(j => (
-                  <tr key={j.id}>
-                    <td>{j.title}</td>
-                    <td>{j.customers?.name || '—'}</td>
-                    <td>{fDate(j.scheduled_date)}</td>
-                  </tr>
-                ))}
-                {!jobs.filter(j => j.status === 'in_progress').length && (
-                  <EmptyState icon="🔧" title={T('noData')} sub={T('noJobs')} />
-                )}
-              </tbody>
-            </table>
+            <table><tbody>
+              {jobs.filter(j => j.status === 'in_progress').slice(0, 5).map(j => (
+                <tr key={j.id} onClick={() => openModal('jobs', j)} style={{ cursor: 'pointer' }}>
+                  <td>{j.title}</td>
+                  <td>{j.customers?.name || '—'}</td>
+                  <td>{fDate(j.scheduled_date)}</td>
+                </tr>
+              ))}
+              {!jobs.filter(j => j.status === 'in_progress').length && <EmptyState icon="🔧" title={T('noData')} sub={T('noJobs')} />}
+            </tbody></table>
           </div>
         </div>
       </>
