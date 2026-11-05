@@ -31,7 +31,7 @@ html, body { height: 100%; font-family: 'Poppins', sans-serif; background: var(-
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: var(--bg);
+  background: var(--dark);
 }
 .auth-box {
   width: 100%;
