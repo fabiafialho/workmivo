@@ -38,7 +38,7 @@ const fCurrency = (n, cur = 'USD') =>
 const fDate = d => d ? new Date(d).toLocaleDateString() : '—'
 
 const Logo = ({ size = 32 }) => (
-  <img src="/logo.png" width={size} height={size} alt="Workmivo" style={{ objectFit: 'contain' }} />
+  <img src="/logo.png" height={size} alt="Workmivo" style={{ objectFit: 'contain', maxWidth: size * 4 }} />
 )
 
 // Avatar with initials

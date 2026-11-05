@@ -50,7 +50,7 @@ html, body { height: 100%; font-family: 'Poppins', sans-serif; background: var(-
   gap: 10px;
   margin-bottom: 28px;
 }
-.auth-logo-svg { width: 64px; height: 64px; flex-shrink: 0; }
+.auth-logo img { height: 56px; width: auto; max-width: 220px; object-fit: contain; }
 .auth-logo-name { font-size: 20px; font-weight: 700; color: var(--dark); }
 
 .auth-sub { color: var(--text2); font-size: 14px; margin-bottom: 32px; }
