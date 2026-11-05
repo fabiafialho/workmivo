@@ -950,7 +950,7 @@ export default function App() {
             </div>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8 }}>
               <input value={newTask} onChange={e => setNewTask(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTask()}
-                placeholder="Nova tarefa..." style={{ flex: 1, background: 'var(--dark3)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', color: 'var(--text)', fontSize: 13 }} />
+                placeholder="Nova tarefa..." style={{ flex: 1, background: 'var(--bg)', border: '1.5px solid var(--border)', borderRadius: 6, padding: '6px 10px', color: 'var(--text)', fontSize: 13 }} />
               <button onClick={addTask} className="btn btn-primary btn-sm">+</button>
             </div>
             <div style={{ maxHeight: 220, overflowY: 'auto' }}>
@@ -1473,8 +1473,8 @@ export default function App() {
               <input type="number" value={form.tax || ''} onChange={e => { const v=Number(e.target.value); setForm(f=>({...f,tax:v,total:Math.max(0,(Number(f.subtotal)||0)-(Number(f.discount)||0)+v)})) }} min="0" step="0.01" /></div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div className="field"><label style={{ color: 'var(--lime)' }}>{T('total')}</label>
-              <input type="number" value={form.total || ''} onChange={e => setF('total', e.target.value)} min="0" step="0.01" style={{ fontWeight: 700, color: 'var(--lime)' }} /></div>
+            <div className="field"><label style={{ color: 'var(--success)' }}>{T('total')}</label>
+              <input type="number" value={form.total || ''} onChange={e => setF('total', e.target.value)} min="0" step="0.01" style={{ fontWeight: 700, color: 'var(--success)' }} /></div>
             <div className="field"><label>{T('dueDate')}</label>
               <input type="date" value={form.due_date || ''} onChange={e => setF('due_date', e.target.value)} /></div>
           </div>
