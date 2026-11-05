@@ -12,7 +12,7 @@ import {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const LIMITS = {
-  basico:   { customers: 30,       estimates_month: 10,  dashboard: false, approval: false },
+  basico:   { customers: 30,       estimates_month: 10,  dashboard: true, approval: true },
   pro:      { customers: 300,      estimates_month: 300, dashboard: true,  approval: true  },
   business: { customers: Infinity, estimates_month: Infinity, dashboard: true, approval: true }
 }
@@ -1362,6 +1362,21 @@ export default function App() {
             <button className="btn btn-secondary" onClick={closeModal}>{T('cancel')}</button>
             {editing && <button className="btn btn-secondary" onClick={() => printPDF('estimate')} style={{ marginLeft: 'auto', marginRight: 8 }}>⬇ PDF</button>}
             {editing && (editing.approval_token || form.approval_token) && <button className="btn btn-secondary" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/p/${editing.approval_token || form.approval_token}`); alert('Link copiado!') }} style={{ marginRight: 8 }}>🔗 Link</button>}
+            {editing && (() => { const cust = customers.find(c => c.id === (form.customer_id || editing.customer_id)); return cust?.email ? (
+              <button className="btn btn-secondary" disabled={saving} style={{ marginRight: 8 }} onClick={async () => {
+                setSaving(true)
+                const token = editing.approval_token || form.approval_token
+                const portalLink = token ? `${window.location.origin}/p/${token}` : null
+                const r = await fetch('/api/send-estimate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+                  to: cust.email, customerName: cust.name, companyName: company?.name,
+                  estimateTitle: form.title || editing.title, estimateTotal: form.total || editing.total,
+                  currency: company?.currency || 'USD', portalLink, notes: form.notes || editing.notes
+                })})
+                setSaving(false)
+                const d = await r.json()
+                if (d.ok) alert('Email enviado!'); else alert('Erro: ' + d.error)
+              }}>📧 Email</button>
+            ) : null })()}
             {editing && (editing.status === 'approved' || form.status === 'approved') && <button className="btn btn-secondary" onClick={convertEstimateToJob} disabled={saving} style={{ marginRight: 8 }}>→ Job</button>}
             <button className="btn btn-primary" onClick={saveEstimate} disabled={saving}>{saving ? T('loading') : T('save')}</button>
           </div>
