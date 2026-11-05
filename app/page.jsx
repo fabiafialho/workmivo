@@ -5,7 +5,8 @@ import { tr } from '../lib/translations'
 import {
   LayoutDashboard, Users, FileText, Briefcase, Receipt,
   Settings, Menu, X, LogOut, Plus, Edit2, Trash2,
-  DollarSign, TrendingUp, Clock, UserCheck, Trash
+  DollarSign, TrendingUp, Clock, UserCheck, Trash,
+  ChevronLeft, ChevronRight
 } from 'lucide-react'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -146,6 +147,8 @@ export default function App() {
   const [error, setError] = useState('')
   const [msg, setMsg] = useState('')
   const [search, setSearch] = useState('')
+  const [jobView, setJobView] = useState('list') // 'list' | 'calendar'
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() } })
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [inlineCustomer, setInlineCustomer] = useState(null) // null | { name, phone, email }
   const [savingCustomer, setSavingCustomer] = useState(false)
@@ -949,11 +952,65 @@ export default function App() {
     </div>
   )
 
+  const renderCalendar = () => {
+    const { year, month } = calMonth
+    const firstDay = new Date(year, month, 1).getDay()
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const monthName = new Date(year, month, 1).toLocaleString(lang === 'pt' ? 'pt-BR' : lang === 'es' ? 'es-MX' : 'en-US', { month: 'long', year: 'numeric' })
+    const cells = []
+    for (let i = 0; i < firstDay; i++) cells.push(null)
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+    const jobsByDay = {}
+    jobs.forEach(j => {
+      if (!j.scheduled_date) return
+      const d = new Date(j.scheduled_date + 'T12:00')
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        const key = d.getDate()
+        if (!jobsByDay[key]) jobsByDay[key] = []
+        jobsByDay[key].push(j)
+      }
+    })
+    const today = new Date()
+    const isToday = (d) => d === today.getDate() && month === today.getMonth() && year === today.getFullYear()
+    return (
+      <div style={{ padding: '0 0 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <button className="btn btn-ghost btn-icon" onClick={() => setCalMonth(m => { const d = new Date(m.year, m.month - 1, 1); return { year: d.getFullYear(), month: d.getMonth() } })}><ChevronLeft size={16} /></button>
+          <span style={{ fontWeight: 700, fontSize: 15, flex: 1, textAlign: 'center', textTransform: 'capitalize' }}>{monthName}</span>
+          <button className="btn btn-ghost btn-icon" onClick={() => setCalMonth(m => { const d = new Date(m.year, m.month + 1, 1); return { year: d.getFullYear(), month: d.getMonth() } })}><ChevronRight size={16} /></button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+          {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => (
+            <div key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--text2)', padding: '4px 0', textTransform: 'uppercase' }}>{d}</div>
+          ))}
+          {cells.map((day, i) => (
+            <div key={i} style={{ minHeight: 80, background: day ? 'var(--dark2)' : 'transparent', borderRadius: 6, padding: 6, border: isToday(day) ? '1.5px solid var(--lime)' : '1.5px solid transparent' }}>
+              {day && <>
+                <div style={{ fontSize: 12, fontWeight: isToday(day) ? 700 : 400, color: isToday(day) ? 'var(--lime)' : 'var(--text2)', marginBottom: 4 }}>{day}</div>
+                {(jobsByDay[day] || []).map(j => (
+                  <div key={j.id} onClick={() => openModal('jobs', j)} style={{ fontSize: 11, background: `${STATUS_COLOR[j.status] || '#888'}22`, color: STATUS_COLOR[j.status] || 'var(--text)', borderRadius: 4, padding: '2px 6px', marginBottom: 2, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {j.title}
+                  </div>
+                ))}
+              </>}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   const renderJobs = () => (
     <div className="table-wrap">
-      <div className="table-search">
-        <input placeholder={T('search')} value={search} onChange={e => setSearch(e.target.value)} />
+      <div className="table-search" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {jobView === 'list' && <input placeholder={T('search')} value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1 }} />}
+        {jobView === 'calendar' && <div style={{ flex: 1 }} />}
+        <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+          <button onClick={() => setJobView('list')} style={{ padding: '6px 12px', fontSize: 12, background: jobView === 'list' ? 'var(--lime)' : 'transparent', color: jobView === 'list' ? '#000' : 'var(--text2)', border: 'none', cursor: 'pointer', fontWeight: 600 }}>≡ Lista</button>
+          <button onClick={() => setJobView('calendar')} style={{ padding: '6px 12px', fontSize: 12, background: jobView === 'calendar' ? 'var(--lime)' : 'transparent', color: jobView === 'calendar' ? '#000' : 'var(--text2)', border: 'none', cursor: 'pointer', fontWeight: 600 }}>⊞ Calendário</button>
+        </div>
       </div>
+      {jobView === 'calendar' ? renderCalendar() : <div>
       <table>
         <thead><tr>
           <th>{T('title')}</th><th>{T('customer')}</th><th>{T('status')}</th><th>{T('scheduledDate')}</th><th></th>
@@ -980,6 +1037,7 @@ export default function App() {
           {!filteredJobs.length && <EmptyState icon="🔧" title={T('noJobs')} sub={lang === 'es' ? 'Ningún trabajo programado aún.' : lang === 'pt' ? 'Nenhum trabalho agendado ainda.' : 'No jobs scheduled yet.'} />}
         </tbody>
       </table>
+    </div>}
     </div>
   )
 
