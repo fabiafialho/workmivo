@@ -400,6 +400,52 @@ export default function App() {
     await loadData(); setSaving(false); closeModal()
   }
 
+  // ─── Convert estimate → job ──────────────────────────────────────────────────
+  const convertEstimateToJob = async () => {
+    if (!editing) return
+    setSaving(true)
+    const payload = {
+      company_id: company.id,
+      customer_id: editing.customer_id || null,
+      estimate_id: editing.id,
+      title: editing.title,
+      description: editing.description || null,
+      status: 'scheduled',
+      notes: editing.notes || null,
+      scheduled_date: null,
+      scheduled_time: null
+    }
+    const { data } = await supabase.from('jobs').insert(payload).select().single()
+    await loadData()
+    setSaving(false)
+    closeModal()
+    setTimeout(() => { setPage('jobs'); openModal('jobs', data) }, 100)
+  }
+
+  // ─── Convert job → invoice ───────────────────────────────────────────────────
+  const convertJobToInvoice = async () => {
+    if (!editing) return
+    setSaving(true)
+    const est = estimates.find(e => e.id === editing.estimate_id)
+    const payload = {
+      company_id: company.id,
+      customer_id: editing.customer_id || null,
+      estimate_id: editing.estimate_id || null,
+      title: editing.title,
+      notes: editing.notes || null,
+      status: 'unpaid',
+      subtotal: est?.subtotal || 0,
+      discount: est?.discount || 0,
+      tax: est?.tax || 0,
+      total: est?.total || 0
+    }
+    const { data } = await supabase.from('invoices').insert(payload).select().single()
+    await loadData()
+    setSaving(false)
+    closeModal()
+    setTimeout(() => { setPage('invoices'); openModal('invoices', data) }, 100)
+  }
+
   // ─── Save invoice ────────────────────────────────────────────────────────────
   const printPDF = (type) => {
     const isEstimate = type === 'estimate'
@@ -1263,6 +1309,7 @@ export default function App() {
             <button className="btn btn-secondary" onClick={closeModal}>{T('cancel')}</button>
             {editing && <button className="btn btn-secondary" onClick={() => printPDF('estimate')} style={{ marginLeft: 'auto', marginRight: 8 }}>⬇ PDF</button>}
             {editing && (editing.approval_token || form.approval_token) && <button className="btn btn-secondary" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/p/${editing.approval_token || form.approval_token}`); alert('Link copiado!') }} style={{ marginRight: 8 }}>🔗 Link</button>}
+            {editing && (editing.status === 'approved' || form.status === 'approved') && <button className="btn btn-secondary" onClick={convertEstimateToJob} disabled={saving} style={{ marginRight: 8 }}>→ Job</button>}
             <button className="btn btn-primary" onClick={saveEstimate} disabled={saving}>{saving ? T('loading') : T('save')}</button>
           </div>
         </div>
@@ -1309,6 +1356,7 @@ export default function App() {
         </div>
         <div className="modal-foot">
           <button className="btn btn-secondary" onClick={closeModal}>{T('cancel')}</button>
+          {editing && (editing.status === 'completed' || form.status === 'completed') && <button className="btn btn-secondary" onClick={convertJobToInvoice} disabled={saving} style={{ marginLeft: 'auto', marginRight: 8 }}>→ Invoice</button>}
           <button className="btn btn-primary" onClick={saveJob} disabled={saving}>{saving ? T('loading') : T('save')}</button>
         </div>
       </div>
