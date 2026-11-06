@@ -2,9 +2,8 @@
 const nextConfig = {
   async rewrites() {
     return [
-      { source: '/', destination: '/vendas.html' },
+      { source: '/vendas', destination: '/vendas.html' },
     ]
   },
 }
-
 export default nextConfig
