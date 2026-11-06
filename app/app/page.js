@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
-import { tr } from '../lib/translations'
+import { supabase } from '../../lib/supabase'
+import { tr } from '../../lib/translations'
 import {
   LayoutDashboard, Users, FileText, Briefcase, Receipt,
   Settings, Menu, X, LogOut, Plus, Edit2, Trash2,
