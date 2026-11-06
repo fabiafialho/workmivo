@@ -695,7 +695,7 @@ export default function App() {
   // ─── Renders ─────────────────────────────────────────────────────────────────
 
   if (stage === 'loading') return (
-    <div className="auth-wrap"><p style={{ color: 'var(--text2)' }}>{T('loading')}</p></div>
+    <div className="auth-wrap"><p style={{ color: 'rgba(255,255,255,0.55)' }}>{T('loading')}</p></div>
   )
 
   if (stage === 'login') return (
@@ -718,7 +718,7 @@ export default function App() {
             <input type="password" value={authForm.password} onChange={e => setAuthForm(f => ({ ...f, password: e.target.value }))} required /></div>
           <button type="submit" className="btn btn-primary btn-full" style={{ marginBottom: 12 }} disabled={saving}>{saving ? T('loading') : T('login')}</button>
         </form>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
           <button className="btn-ghost btn" style={{ fontSize: 13, padding: '4px 0' }} onClick={() => { setStage('register'); setError(''); setMsg('') }}>{T('noAccount')} {T('register')}</button>
           <button className="btn-ghost btn" style={{ fontSize: 13, padding: '4px 0' }} onClick={() => { setStage('forgot'); setError(''); setMsg('') }}>{T('forgotPassword')}</button>
         </div>

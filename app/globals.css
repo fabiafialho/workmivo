@@ -51,10 +51,18 @@ html, body { height: 100%; font-family: 'Poppins', sans-serif; background: var(-
   margin-bottom: 28px;
 }
 .auth-logo img { height: 56px; width: auto; max-width: 220px; object-fit: contain; }
-.auth-logo-name { font-size: 20px; font-weight: 700; color: var(--dark); }
+.auth-logo-name { font-size: 20px; font-weight: 700; color: #fff; }
 
 .auth-sub { color: rgba(255,255,255,0.55); font-size: 14px; margin-bottom: 32px; }
 .auth-title { font-size: 20px; font-weight: 600; color: #fff; margin-bottom: 24px; }
+
+/* Overrides para elementos genéricos dentro do card escuro */
+.auth-box .btn-ghost { color: rgba(255,255,255,0.65); }
+.auth-box .btn-ghost:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.auth-wrap > p { color: rgba(255,255,255,0.55); }
+.auth-box .lang-btn { color: rgba(255,255,255,0.55); border-color: transparent; }
+.auth-box .lang-btn.active,
+.auth-box .lang-btn:hover { background: rgba(255,255,255,0.15); color: #fff; border-color: rgba(255,255,255,0.3); }
 
 /* ── FORM ───────────────────────────────────────────────────────────────────── */
 .field { margin-bottom: 16px; }
